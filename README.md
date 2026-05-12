@@ -49,6 +49,50 @@ JUSO_API_KEY     = "..."   # https://www.juso.go.kr  (도로명주소 개발자�
 
 ---
 
+## 웹 프론트엔드
+
+Vite + React 기반 UI로, 주소 입력부터 결과 확인까지 브라우저에서 바로 사용할 수 있습니다.
+
+### 실행
+
+터미널 두 개를 열고 각각 실행합니다.
+
+**① API 서버 (포트 8001)**
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+**② 프론트엔드 개발 서버 (포트 5173)**
+
+```bash
+cd frontend
+npm install   # 최초 1회
+npm run dev
+```
+
+브라우저에서 **http://localhost:5173** 접속
+
+### 프론트엔드 기능
+
+| 기능 | 설명 |
+|---|---|
+| 주소 입력창 | 도로명·지번 자동 감지 배지, 엔터키 지원 |
+| 실시간 프로그레스 | WebSocket으로 1/5~5/5 단계 실시간 표시 |
+| 결과 카드 | 시스템 용량·연간 발전량·설치비·회수기간·CO₂ 저감 |
+| 월별 발전량 차트 | SVG 막대 차트 (최대·최소 색상 강조) |
+| 보고서 다운로드 | HTML / PDF 다운로드 버튼 |
+| 복수 건물 비교 | 주소 2~5개 병렬 분석 + ★ 최적값 강조 비교 테이블 |
+
+### 프로덕션 빌드
+
+```bash
+cd frontend
+npm run build   # dist/ 생성
+```
+
+---
+
 ## 사용법
 
 ### 단일 주소 설계
@@ -144,6 +188,25 @@ tests/test_address_api.py::TestAddressAPI::test_parcel_fallback PASSED
 solar-design/
 ├── main.py                      # 진입점 (--address / --compare)
 ├── config.example.py            # API 키 설정 예시
+├── api/
+│   ├── main.py                  # FastAPI 앱 (CORS, /files 정적 서빙)
+│   ├── pipeline.py              # 단일·비교 파이프라인 공통 로직
+│   └── routers/
+│       ├── analyze.py           # POST /analyze, WS /ws/analyze
+│       └── compare.py           # POST /compare, WS /ws/compare
+├── frontend/                    # Vite + React 프론트엔드
+│   ├── src/
+│   │   ├── App.jsx              # 탭 네비게이션
+│   │   ├── components/
+│   │   │   ├── SingleAnalysis.jsx   # 단일 건물 분석 페이지
+│   │   │   ├── CompareAnalysis.jsx  # 복수 건물 비교 페이지
+│   │   │   ├── AddressInput.jsx     # 주소 입력 + 자동 감지 배지
+│   │   │   ├── ProgressBar.jsx      # WebSocket 프로그레스
+│   │   │   ├── ResultCards.jsx      # 결과 카드 + 테이블
+│   │   │   ├── MonthlyChart.jsx     # SVG 막대 차트
+│   │   │   └── DownloadButtons.jsx  # HTML/PDF 다운로드
+│   │   └── App.css              # amber/orange 디자인 시스템
+│   └── package.json
 ├── data_collector/
 │   ├── address_api.py           # VWorld 지오코딩 (도로명·지번)
 │   ├── building_api.py          # 건축HUB + Juso API
