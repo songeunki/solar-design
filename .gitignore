@@ -13,5 +13,9 @@ output/reports/
 config.py
 .env
 
+# Frontend build artifacts
+frontend/dist/
+frontend/node_modules/
+
 # Claude Code 로컬 설정
 .claude/

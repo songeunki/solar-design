@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pathlib
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.routers import analyze, compare
 
@@ -21,6 +23,10 @@ app.add_middleware(
 
 app.include_router(analyze.router)
 app.include_router(compare.router)
+
+_REPORTS_DIR = pathlib.Path(__file__).parent.parent / "output" / "reports"
+_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/files", StaticFiles(directory=str(_REPORTS_DIR)), name="files")
 
 
 @app.get("/health")
