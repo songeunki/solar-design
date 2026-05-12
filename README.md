@@ -104,6 +104,8 @@ PDF : output/reports/comparison_20260512_164749.pdf
 
 건물별 KPI 요약 카드 + 항목별 비교 테이블 (최우수 값 녹색·최하위 값 빨간색 강조)
 
+![비교 보고서 스크린샷](docs/comparison_screenshot.png)
+
 ---
 
 ## 프로젝트 구조
