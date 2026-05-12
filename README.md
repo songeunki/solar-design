@@ -24,7 +24,7 @@
 ### 1. 패키지 설치
 
 ```bash
-pip install requests playwright
+pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
