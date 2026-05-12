@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# 생성 보고서 (대용량, 재생성 가능)
+output/reports/
+
+# API 키 포함 설정 파일 (config.example.py를 복사해서 사용)
+config.py
+.env
+
+# Claude Code 로컬 설정
+.claude/
