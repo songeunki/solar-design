@@ -110,6 +110,32 @@ PDF : output/reports/comparison_20260512_164749.pdf
 
 ---
 
+## 테스트
+
+```bash
+pytest tests/ -v
+```
+
+```
+============================= test session starts =============================
+tests/test_address_api.py::TestAddressAPI::test_road_address_success PASSED
+tests/test_address_api.py::TestAddressAPI::test_parcel_fallback PASSED
+...
+88 passed in 0.42s
+```
+
+실제 API 호출 없이 `unittest.mock`으로 전체 테스트가 실행됩니다.
+
+| 파일 | 테스트 수 | 검증 내용 |
+|---|---|---|
+| `test_address_api.py` | 8 | road→parcel fallback, 네트워크 오류, 주소 파싱 |
+| `test_building_api.py` | 14 | PNU 추출 3단계, Juso API, 건물 파싱, fallback |
+| `test_roof_analyzer.py` | 18 | 태양 고도각, GCR, 방위각 보정, 경사지붕, 경고 노트 |
+| `test_electrical.py` | 17 | 인버터 선정, 직병렬 구성, 방위각 보정 반영, 발전량 계산 |
+| `test_structural.py` | 15 | 풍·적설 하중, 앙카 사양, 마운팅 방식, 경고 노트 |
+
+---
+
 ## 프로젝트 구조
 
 ```
