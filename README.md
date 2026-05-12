@@ -1,5 +1,7 @@
 # ☀ 태양광 설계 자동화 시스템
 
+[![CI](https://github.com/songeunki/solar-design/actions/workflows/ci.yml/badge.svg)](https://github.com/songeunki/solar-design/actions/workflows/ci.yml)
+
 주소 하나를 입력하면 건축물대장 조회 → 일사량 수집 → 지붕 분석 → 전기·구조 설계 → 보고서(HTML/PDF) 생성까지 전 과정을 자동화합니다.
 
 ---
