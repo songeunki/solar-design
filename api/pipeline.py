@@ -36,13 +36,16 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
 
     p(5, "보고서 생성")
     report = ReportGenerator().generate(
-        address, building, roof, electrical, structural
+        address, building, roof, electrical, structural,
+        lat=location.lat, lng=location.lng,
     )
 
     return {
         "summary":   report.summary,
         "html_path": report.file_path,
         "pdf_path":  report.pdf_path,
+        "lat":       location.lat,
+        "lng":       location.lng,
     }
 
 

@@ -170,6 +170,11 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     building_type = _PURPOSE_TO_TYPE.get(purpose, "기타")
     floors        = int(item.get("grndFlrCnt") or 1)
     roof_area     = float(item.get("archArea") or 0.0)
+    # archArea가 0일 때 totArea / floors로 추정 (연면적 ÷ 층수 = 층당 면적 ≈ 지붕면적)
+    if roof_area == 0.0:
+        tot_area = float(item.get("totArea") or 0.0)
+        if tot_area > 0:
+            roof_area = round(tot_area / max(floors, 1), 1)
     roof_cd       = item.get("roofCdNm", "")
 
     if "경사" in roof_cd:

@@ -171,3 +171,66 @@
 .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
 .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
 .empty-state p { font-size: 15px; }
+
+/* ── Split layout (SingleAnalysis: 지도 60% / 입력+결과 40%) ─────────────── */
+.split-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 220px);
+  min-height: 540px;
+}
+
+.split-left {
+  flex: 0 0 60%;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.split-right {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* 스크롤바 공간 확보 */
+  padding-right: 2px;
+}
+
+/* 지도 위 힌트 오버레이 */
+.map-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 20px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  letter-spacing: 0.2px;
+}
+
+/* 반응형: 태블릿 이하에서 세로 스택 */
+@media (max-width: 900px) {
+  .split-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: unset;
+  }
+  .split-left {
+    flex: none;
+    height: 55vw;
+    min-height: 280px;
+    max-height: 420px;
+  }
+  .split-right {
+    overflow-y: visible;
+  }
+}

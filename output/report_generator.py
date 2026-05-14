@@ -1,7 +1,9 @@
+import base64
 import json
 import datetime
 import pathlib
 import warnings
+import requests
 from dataclasses import dataclass
 from data_collector.building_api import BuildingInfo
 from analyzer.roof_analyzer import RoofAnalysis
@@ -55,13 +57,16 @@ class ReportGenerator:
         roof: RoofAnalysis,
         electrical: ElectricalDesign,
         structural: StructuralDesign,
+        lat: float | None = None,
+        lng: float | None = None,
     ) -> Report:
         _OUTPUT_DIR.mkdir(exist_ok=True)
 
         ts      = datetime.datetime.now()
         stem    = _file_stem(address, ts)
         summary = _build_summary(address, ts, building, roof, electrical, structural)
-        html_str = _render_html(summary)
+        map_b64 = _fetch_static_map(lat, lng) if (lat and lng) else None
+        html_str = _render_html(summary, map_b64)
 
         html_path = _OUTPUT_DIR / f"{stem}.html"
         html_path.write_text(html_str, encoding="utf-8")
@@ -74,6 +79,29 @@ class ReportGenerator:
         pdf_path = _write_pdf(html_str, _OUTPUT_DIR / f"{stem}.pdf")
 
         return Report(file_path=str(html_path), pdf_path=pdf_path, summary=summary)
+
+
+def _fetch_static_map(lat: float, lng: float) -> str | None:
+    """카카오 정적 지도 API로 이미지 취득 후 base64 반환. 실패 시 None."""
+    try:
+        from config import KAKAO_REST_API_KEY
+        if not KAKAO_REST_API_KEY:
+            return None
+        resp = requests.get(
+            "https://dapi.kakao.com/v2/maps/staticmap",
+            params={
+                "center":  f"{lng},{lat}",
+                "level":   3,
+                "size":    "640x280",
+                "markers": f"color:red|{lng},{lat}",
+            },
+            headers={"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return base64.b64encode(resp.content).decode()
+    except Exception:
+        return None
 
 
 def _write_pdf(html_str: str, dest: pathlib.Path) -> str | None:
@@ -286,7 +314,7 @@ def _elev_bar(deg: float, max_deg: float = 90.0) -> str:
     )
 
 
-def _render_html(s: dict) -> str:
+def _render_html(s: dict, map_b64: str | None = None) -> str:
     b  = s["건물정보"]
     r  = s["지붕분석"]
     e  = s["태양광시스템"]
@@ -297,6 +325,13 @@ def _render_html(s: dict) -> str:
         f'<div class="alert">{n}</div>' for n in s["특이사항"]
     ) or '<p class="no-note">특이사항 없음</p>'
     chart_svg  = _monthly_chart(e["월별발전량_kWh"])
+    map_section = (
+        f'<div style="max-width:980px;margin:0 auto;padding:20px 24px 0">'
+        f'<div style="border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">'
+        f'<img src="data:image/png;base64,{map_b64}" style="width:100%;height:auto;display:block" alt="건물 위치 지도"/>'
+        f'<div style="background:#fff;padding:10px 18px;font-size:0.82em;color:#7888a4">📍 {s["주소"]}</div>'
+        f'</div></div>'
+    ) if map_b64 else ''
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
@@ -480,6 +515,8 @@ def _render_html(s: dict) -> str:
     <span>🗓 {date_str}</span>
   </div>
 </div>
+
+{map_section}
 
 <div class="container">
 
