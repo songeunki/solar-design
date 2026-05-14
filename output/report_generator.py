@@ -514,7 +514,7 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:
       color: #78450a;
       margin-bottom: 8px;
     }}
-    .alert::before {{ content: "⚠\00a0"; }}
+    .alert::before {{ content: "[주의] "; }}
     .no-note {{ font-size: 0.9em; color: #a0aec0; }}
 
     /* ── Footnote ── */
