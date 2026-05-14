@@ -16,18 +16,18 @@ export default function DownloadButtons({ htmlPath, pdfPath }) {
     <div className="download-row">
       {htmlUrl ? (
         <a className="dl-btn dl-btn-html" href={htmlUrl} target="_blank" rel="noreferrer" download>
-          🌐 HTML 보고서 다운로드
+          🌐 HTML 보고서
         </a>
       ) : (
         <button className="dl-btn dl-btn-html" disabled>🌐 HTML 보고서</button>
       )}
       {pdfUrl ? (
         <a className="dl-btn dl-btn-pdf" href={pdfUrl} target="_blank" rel="noreferrer" download>
-          📄 PDF 보고서 다운로드
+          📄 PDF 보고서
         </a>
       ) : (
         <button className="dl-btn dl-btn-pdf" disabled>
-          📄 PDF 보고서 {!pdfPath ? '(생성 안됨)' : ''}
+          📄 PDF 보고서{!pdfPath ? ' (생성 안됨)' : ''}
         </button>
       )}
     </div>

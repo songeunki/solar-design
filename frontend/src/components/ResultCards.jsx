@@ -3,43 +3,27 @@ import DownloadButtons from './DownloadButtons'
 
 const METRICS = [
   {
-    key: 'capacity',
-    icon: '⚡',
-    label: '시스템 용량',
-    unit: 'kW',
-    highlight: true,
+    key: 'capacity', icon: '⚡', label: '시스템 용량', unit: 'kW', highlight: true,
     get: s => s['태양광시스템']?.['총용량_kW'],
     fmt: v => v?.toFixed(1),
   },
   {
-    key: 'generation',
-    icon: '🔆',
-    label: '연간 발전량',
-    unit: 'kWh/년',
+    key: 'generation', icon: '🔆', label: '연간 발전량', unit: 'kWh/년',
     get: s => s['태양광시스템']?.['연간발전량_kWh'],
     fmt: v => v?.toLocaleString(),
   },
   {
-    key: 'cost',
-    icon: '💰',
-    label: '예상 설치비',
-    unit: '만원',
+    key: 'cost', icon: '💰', label: '예상 설치비', unit: '만원',
     get: s => s['경제성']?.['예상설치비_만원'],
     fmt: v => v?.toLocaleString(),
   },
   {
-    key: 'payback',
-    icon: '📅',
-    label: '단순 회수기간',
-    unit: '년',
+    key: 'payback', icon: '📅', label: '단순 회수기간', unit: '년',
     get: s => s['경제성']?.['단순회수기간_년'],
     fmt: v => v?.toFixed(1),
   },
   {
-    key: 'co2',
-    icon: '🌿',
-    label: 'CO₂ 저감량',
-    unit: 'kg/년',
+    key: 'co2', icon: '🌿', label: 'CO₂ 저감량', unit: 'kg/년',
     get: s => s['경제성']?.['연간CO2저감_kg'],
     fmt: v => v?.toLocaleString(),
   },
@@ -48,25 +32,34 @@ const METRICS = [
 export default function ResultCards({ summary, htmlPath, pdfPath }) {
   if (!summary) return null
 
-  const monthly = summary['태양광시스템']?.['월별발전량_kWh']
-  const notes   = summary['특이사항'] || []
-  const address = summary['주소']
+  const monthly    = summary['태양광시스템']?.['월별발전량_kWh']
+  const notes      = summary['특이사항'] || []
+  const address    = summary['주소']
+  const isFallback = summary['건물정보']?.['추정값'] === true
 
   return (
     <div className="result-section">
-      <p className="result-address">
-        분석 완료: <strong>{address}</strong>
-      </p>
+      <p className="result-address">분석 완료: <strong>{address}</strong></p>
+
+      {isFallback && (
+        <div className="fallback-banner">
+          <span className="fallback-icon">⚠</span>
+          <span>
+            건축물대장 API 조회 실패 — 기본값(100㎡ 평지붕)으로 추정한 결과입니다.
+            실제 건물과 수치가 다를 수 있습니다.
+          </span>
+        </div>
+      )}
 
       <div className="metric-grid">
         {METRICS.map((m, i) => {
-          const raw = m.get(summary)
+          const raw     = m.get(summary)
           const display = raw != null ? m.fmt(raw) : '—'
           return (
             <div
               key={m.key}
               className={`metric-card ${m.highlight ? 'highlight' : ''}`}
-              style={{ animationDelay: `${i * 0.05}s` }}
+              style={{ animationDelay: `${i * 0.06}s` }}
             >
               <div className="metric-icon">{m.icon}</div>
               <div className="metric-label">{m.label}</div>
@@ -101,25 +94,26 @@ export default function ResultCards({ summary, htmlPath, pdfPath }) {
 function BuildingInfo({ summary }) {
   const b = summary['건물정보']
   if (!b) return null
+
   const rows = [
     ['건물 유형', b['유형']],
-    ['층수', b['층수'] ? `${b['층수']}층` : '—'],
-    ['지붕 면적', b['지붕면적_m2'] ? `${b['지붕면적_m2']} m²` : '—'],
+    ['층수',      b['층수']         ? `${b['층수']}층`         : null],
+    ['지붕 면적', b['지붕면적_m2']  ? `${b['지붕면적_m2']} m²` : null],
     ['지붕 형태', b['지붕형태']],
-    ['경사각', b['경사각_deg'] ? `${b['경사각_deg']}°` : '—'],
-    ['구조', b['구조']],
-  ].filter(([, v]) => v && v !== '—')
+    ['경사각',    b['경사각_deg']   ? `${b['경사각_deg']}°`    : null],
+    ['구조',      b['구조']],
+  ].filter(([, v]) => v)
 
   const sys = summary['태양광시스템']
   const sysRows = [
-    ['패널 수', sys?.['패널수'] ? `${sys['패널수']} 장` : '—'],
-    ['인버터 용량', sys?.['인버터용량_kW'] ? `${sys['인버터용량_kW']} kW` : '—'],
+    ['패널 수',     sys?.['패널수']          ? `${sys['패널수']} 장`           : null],
+    ['인버터 용량', sys?.['인버터용량_kW']   ? `${sys['인버터용량_kW']} kW`    : null],
     ['직병렬 구성', sys?.['직병렬구성']],
-  ].filter(([, v]) => v && v !== '—')
+  ].filter(([, v]) => v)
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      <InfoTable title="건물 정보" rows={rows} />
+    <div className="info-grid">
+      <InfoTable title="건물 정보"   rows={rows} />
       <InfoTable title="시스템 구성" rows={sysRows} />
     </div>
   )
@@ -129,12 +123,12 @@ function InfoTable({ title, rows }) {
   return (
     <div className="section-panel card">
       <p className="section-title">{title}</p>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <table className="info-table">
         <tbody>
           {rows.map(([k, v]) => (
             <tr key={k}>
-              <td style={{ padding: '5px 0', color: 'var(--text-2)', width: '45%' }}>{k}</td>
-              <td style={{ padding: '5px 0', fontWeight: 500, color: 'var(--text-1)' }}>{v}</td>
+              <td>{k}</td>
+              <td>{v}</td>
             </tr>
           ))}
         </tbody>

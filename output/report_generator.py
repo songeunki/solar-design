@@ -192,6 +192,7 @@ def _build_summary(
             "지붕형태": building.roof_type,
             "경사각_deg": building.roof_slope_deg,
             "구조": building.structure,
+            "추정값": building.extra.get("fallback", False),
         },
         "지붕분석": {
             "태양고도각": roof.solar_elevations,

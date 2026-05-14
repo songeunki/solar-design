@@ -7,7 +7,7 @@ export default function ProgressBar({ step, total, message }) {
     <div className="progress-wrap">
       <div className="progress-header">
         <span className="progress-label">
-          <span className="status-dot running" style={{ marginRight: 8 }} />
+          <span className="status-dot running" />
           {message || '분석 중…'}
         </span>
         <span className="progress-pct">{pct}%</span>
@@ -19,13 +19,13 @@ export default function ProgressBar({ step, total, message }) {
 
       <div className="progress-steps">
         {STEPS.map((label, i) => {
-          const idx = i + 1
+          const idx      = i + 1
           const isDone   = idx < step
           const isActive = idx === step
           return (
             <div
               key={label}
-              className={`progress-step-item ${isDone ? 'done' : isActive ? 'active' : ''}`}
+              className={`progress-step ${isDone ? 'done' : isActive ? 'active' : ''}`}
             >
               <span className="step-dot" />
               {isDone ? '✓ ' : ''}{label}

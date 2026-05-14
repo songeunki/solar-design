@@ -1,9 +1,15 @@
-import { useState } from 'react'
-
 function detectAddressType(addr) {
   if (!addr) return null
-  const roadPattern = /(로|길)\s*\d/
-  return roadPattern.test(addr) ? 'road' : 'lot'
+  return /(로|길)\s*\d/.test(addr) ? 'road' : 'lot'
+}
+
+function SearchIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 export default function AddressInput({ value, onChange, onSubmit, disabled, placeholder }) {
@@ -14,7 +20,8 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, plac
   }
 
   return (
-    <div className="address-input-wrap">
+    <div className="address-field">
+      <span className="address-icon"><SearchIcon /></span>
       <input
         className="address-input"
         type="text"
