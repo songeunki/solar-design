@@ -317,6 +317,8 @@
 .result-address { font-size: 13px; color: var(--text-3); }
 .result-address strong { color: var(--text-2); font-weight: 500; }
 
+.result-panel-note { font-size: 11px; color: var(--text-3); }
+
 /* Metric cards */
 .metric-grid {
   display: grid;

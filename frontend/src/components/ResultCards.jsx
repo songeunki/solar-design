@@ -51,6 +51,8 @@ export default function ResultCards({ summary, htmlPath, pdfPath }) {
         </div>
       )}
 
+      <p className="result-panel-note">태양광 모듈 용량은 640W 기준으로 산정하였습니다.</p>
+
       <div className="metric-grid">
         {METRICS.map((m, i) => {
           const raw     = m.get(summary)
