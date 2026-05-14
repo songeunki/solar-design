@@ -4,13 +4,13 @@ export default function ProgressBar({ step, total, message }) {
   const pct = total > 0 ? Math.round((step / total) * 100) : 0
 
   return (
-    <div className="progress-wrap card">
+    <div className="progress-wrap">
       <div className="progress-header">
         <span className="progress-label">
           <span className="status-dot running" style={{ marginRight: 8 }} />
           {message || '분석 중…'}
         </span>
-        <span className="progress-step">{step} / {total}</span>
+        <span className="progress-pct">{pct}%</span>
       </div>
 
       <div className="progress-track">

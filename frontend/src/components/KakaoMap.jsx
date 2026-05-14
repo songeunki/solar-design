@@ -9,7 +9,6 @@ function loadKakaoScript() {
       return
     }
     if (document.getElementById('kakao-map-sdk')) {
-      // 이미 로딩 중 — load 완료 이벤트 대기
       const interval = setInterval(() => {
         if (window.kakao?.maps) {
           clearInterval(interval)
@@ -32,7 +31,6 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
   const markerRef     = useRef(null)
   const infoWindowRef = useRef(null)
 
-  // 지도 최초 초기화
   useEffect(() => {
     loadKakaoScript().then(() => {
       if (!containerRef.current || mapRef.current) return
@@ -50,7 +48,6 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
     })
   }, [])
 
-  // 외부에서 lat/lng가 전달되면 마커 이동 + 지도 중심 이동
   useEffect(() => {
     if (!mapRef.current || !markerLatLng) return
     const latlng = new window.kakao.maps.LatLng(markerLatLng.lat, markerLatLng.lng)
@@ -58,7 +55,6 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
     mapRef.current.panTo(latlng)
   }, [markerLatLng])
 
-  // 분석 완료 후 인포윈도우 표시
   useEffect(() => {
     if (!mapRef.current || !markerRef.current || !markerResult) return
     if (infoWindowRef.current) {
@@ -74,7 +70,7 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
     const pay  = s?.['경제성']?.['단순회수기간_년']
 
     const content = `
-      <div style="padding:14px 16px;min-width:210px;font-family:'Segoe UI',sans-serif;font-size:13px;line-height:1.6">
+      <div style="padding:14px 16px;min-width:210px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.6">
         <div style="font-weight:700;color:#1f2937;font-size:13px;margin-bottom:4px">
           ${addr.length > 22 ? addr.slice(0, 22) + '…' : addr}
         </div>
@@ -82,11 +78,11 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
         <div style="display:flex;flex-direction:column;gap:5px">
           <div style="display:flex;justify-content:space-between;gap:16px">
             <span style="color:#6b7280">⚡ 시스템 용량</span>
-            <strong style="color:#d97706">${cap != null ? cap.toFixed(1) + ' kW' : '—'}</strong>
+            <strong style="color:#3B82F6">${cap != null ? cap.toFixed(1) + ' kW' : '—'}</strong>
           </div>
           <div style="display:flex;justify-content:space-between;gap:16px">
             <span style="color:#6b7280">🔆 연간 발전량</span>
-            <strong style="color:#ea580c">${gen != null ? gen.toLocaleString() + ' kWh' : '—'}</strong>
+            <strong style="color:#2563EB">${gen != null ? gen.toLocaleString() + ' kWh' : '—'}</strong>
           </div>
           <div style="display:flex;justify-content:space-between;gap:16px">
             <span style="color:#6b7280">📅 회수 기간</span>
@@ -126,11 +122,9 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         ref={containerRef}
-        style={{ width: '100%', height: '100%', borderRadius: 'var(--radius)' }}
+        style={{ width: '100%', height: '100%' }}
       />
-      <div className="map-hint">
-        지도를 클릭하면 주소가 자동 입력됩니다
-      </div>
+      <div className="map-hint">클릭으로 위치 선택</div>
     </div>
   )
 }

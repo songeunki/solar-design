@@ -59,11 +59,15 @@ export default function ResultCards({ summary, htmlPath, pdfPath }) {
       </p>
 
       <div className="metric-grid">
-        {METRICS.map(m => {
+        {METRICS.map((m, i) => {
           const raw = m.get(summary)
           const display = raw != null ? m.fmt(raw) : '—'
           return (
-            <div key={m.key} className={`metric-card ${m.highlight ? 'highlight' : ''}`}>
+            <div
+              key={m.key}
+              className={`metric-card ${m.highlight ? 'highlight' : ''}`}
+              style={{ animationDelay: `${i * 0.05}s` }}
+            >
               <div className="metric-icon">{m.icon}</div>
               <div className="metric-label">{m.label}</div>
               <div className="metric-value">{display}</div>
@@ -129,8 +133,8 @@ function InfoTable({ title, rows }) {
         <tbody>
           {rows.map(([k, v]) => (
             <tr key={k}>
-              <td style={{ padding: '5px 0', color: 'var(--text-secondary)', width: '45%' }}>{k}</td>
-              <td style={{ padding: '5px 0', fontWeight: 500 }}>{v}</td>
+              <td style={{ padding: '5px 0', color: 'var(--text-2)', width: '45%' }}>{k}</td>
+              <td style={{ padding: '5px 0', fontWeight: 500, color: 'var(--text-1)' }}>{v}</td>
             </tr>
           ))}
         </tbody>

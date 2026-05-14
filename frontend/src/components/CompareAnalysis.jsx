@@ -2,7 +2,6 @@ import { useState, useRef } from 'react'
 import AddressInput from './AddressInput'
 import ProgressBar from './ProgressBar'
 import ResultCards from './ResultCards'
-import MonthlyChart from './MonthlyChart'
 
 const _proto  = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const WS_URL  = `${_proto}//${window.location.host}/ws/analyze`
@@ -81,8 +80,7 @@ export default function CompareAnalysis() {
   const doneEntries = entries.filter(e => e.state === 'done' && e.result)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Address inputs */}
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="card section-panel">
         <p className="section-title">건물 주소 목록 (2~5개)</p>
         <div className="compare-input-list">
@@ -127,13 +125,12 @@ export default function CompareAnalysis() {
         </div>
       </div>
 
-      {/* Per-building progress */}
       {entries.some(e => e.state === 'running') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {entries.map((entry, idx) =>
             entry.state === 'running' && entry.progress ? (
               <div key={entry.id}>
-                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-2)' }}>
                   건물 {idx + 1}: {entry.value.slice(0, 30)}…
                 </p>
                 <ProgressBar
@@ -147,7 +144,6 @@ export default function CompareAnalysis() {
         </div>
       )}
 
-      {/* Errors */}
       {entries.some(e => e.state === 'error') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {entries.map((entry, idx) =>
@@ -160,12 +156,10 @@ export default function CompareAnalysis() {
         </div>
       )}
 
-      {/* Comparison summary table */}
       {doneEntries.length >= 2 && (
         <CompareTable entries={doneEntries} />
       )}
 
-      {/* Per-building result tabs */}
       {doneEntries.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="compare-tabs-nav">
@@ -192,7 +186,7 @@ export default function CompareAnalysis() {
       )}
 
       {!running && doneEntries.length === 0 && entries.every(e => e.state === 'idle') && (
-        <div className="empty-state card">
+        <div className="empty-state">
           <div className="empty-icon">🏘️</div>
           <p>2개 이상의 건물 주소를 입력하고 비교 분석을 시작하세요.</p>
         </div>
@@ -236,9 +230,9 @@ function CompareTable({ entries }) {
   ]
 
   return (
-    <div className="card compare-table-card" style={{ padding: 0 }}>
+    <div className="compare-table-card">
       <div style={{ padding: '16px 20px 0', borderBottom: '1px solid var(--border)' }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 12 }}>
           비교 요약
         </p>
       </div>
@@ -266,7 +260,7 @@ function CompareTable({ entries }) {
                 : null
               return (
                 <tr key={row.label}>
-                  <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{row.label}</td>
+                  <td style={{ color: 'var(--text-2)', fontWeight: 500 }}>{row.label}</td>
                   {vals.map((v, i) => (
                     <td key={i} className={v != null && v === bestVal ? 'best' : ''}>
                       {v != null ? row.fmt(v) : '—'}
