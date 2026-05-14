@@ -46,12 +46,12 @@ export default function MonthlyChart({ values }) {
             <g key={pct}>
               <line
                 x1={pl} y1={y} x2={W - pr} y2={y}
-                stroke="rgba(255,255,255,0.05)" strokeWidth="1"
+                stroke="rgba(0,0,0,0.07)" strokeWidth="1"
                 strokeDasharray={pct === 1 ? 'none' : '4 3'}
               />
               <text
                 x={pl - 6} y={y + 4}
-                textAnchor="end" fontSize="9.5" fill="#4A637D"
+                textAnchor="end" fontSize="9.5" fill="#94a3b8"
                 fontFamily="'Outfit', sans-serif"
               >
                 {Math.round(maxV * pct)}
@@ -74,7 +74,7 @@ export default function MonthlyChart({ values }) {
               {bh > 24 && (
                 <text
                   x={cx} y={y + 13}
-                  textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.7)"
+                  textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.9)"
                   fontWeight="600" fontFamily="'Outfit', sans-serif"
                 >
                   {Math.round(v)}
@@ -82,7 +82,7 @@ export default function MonthlyChart({ values }) {
               )}
               <text
                 x={cx} y={H - 7}
-                textAnchor="middle" fontSize="9.5" fill="#4A637D"
+                textAnchor="middle" fontSize="9.5" fill="#94a3b8"
               >
                 {MONTHS[i]}
               </text>
@@ -93,7 +93,7 @@ export default function MonthlyChart({ values }) {
         {/* Y axis */}
         <line
           x1={pl} y1={pt} x2={pl} y2={pt + ch}
-          stroke="rgba(255,255,255,0.05)" strokeWidth="1"
+          stroke="rgba(0,0,0,0.07)" strokeWidth="1"
         />
       </svg>
     </div>

@@ -44,6 +44,16 @@ export default function SingleAnalysis() {
     setMarkerResult(null)
     setProgress({ step: 0, total: 5, message: '연결 중…' })
 
+    // 분석 시작 즉시 Kakao 클라이언트 지오코딩으로 지도 이동
+    if (window.kakao?.maps?.services) {
+      const geocoder = new window.kakao.maps.services.Geocoder()
+      geocoder.addressSearch(address.trim(), (result, status) => {
+        if (status === window.kakao.maps.services.Status.OK && result[0]) {
+          setMarkerLatLng({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) })
+        }
+      })
+    }
+
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
@@ -57,7 +67,7 @@ export default function SingleAnalysis() {
         setResult(msg.data)
         setMarkerResult(msg.data)
         if (msg.data.lat && msg.data.lng) {
-          setMarkerLatLng(prev => prev ?? { lat: msg.data.lat, lng: msg.data.lng })
+          setMarkerLatLng({ lat: msg.data.lat, lng: msg.data.lng })
         }
         setState('done')
         stateRef.current = 'done'

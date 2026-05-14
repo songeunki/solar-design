@@ -1,40 +1,50 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:         #060B18;
-  --bg-2:       #0A0F1E;
-  --bg-card:    #0C1222;
-  --bg-card-h:  #101929;
+  /* ── Backgrounds ── */
+  --bg:        #f8fafc;
+  --bg-2:      #f1f5f9;
+  --bg-card:   #ffffff;
+  --bg-card-h: #f8fafc;
 
+  /* ── Accent (blue — Linear style) ── */
   --accent:      #3B82F6;
   --accent-h:    #2563EB;
   --accent-dim:  rgba(59,130,246,0.08);
-  --accent-mid:  rgba(59,130,246,0.15);
-  --accent-glow: rgba(59,130,246,0.2);
+  --accent-mid:  rgba(59,130,246,0.12);
+  --accent-glow: rgba(59,130,246,0.15);
   --accent-b:    rgba(59,130,246,0.25);
 
+  /* ── Semantic colors ── */
   --green:     #10B981;
   --green-dim: rgba(16,185,129,0.08);
   --red:       #EF4444;
-  --red-dim:   rgba(239,68,68,0.08);
+  --red-dim:   rgba(239,68,68,0.06);
+  --amber:     #F59E0B;
 
-  --text-1: #F1F5F9;
-  --text-2: #8BA3BE;
-  --text-3: #4A637D;
+  /* ── Text ── */
+  --text-1: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
 
-  --border:   rgba(255,255,255,0.06);
-  --border-a: rgba(59,130,246,0.22);
-  --border-h: rgba(255,255,255,0.1);
+  /* ── Borders ── */
+  --border:   rgba(0,0,0,0.08);
+  --border-a: rgba(59,130,246,0.25);
+  --border-h: rgba(0,0,0,0.14);
 
-  --glass:   rgba(6,11,24,0.82);
-  --glass-b: rgba(255,255,255,0.05);
+  /* ── Glass / surface ── */
+  --glass:   rgba(255,255,255,0.92);
+  --glass-b: rgba(0,0,0,0.04);
 
+  /* ── Radii ── */
   --r-sm: 8px;
   --r:    12px;
   --r-lg: 16px;
 
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.5), 0 4px 20px rgba(0,0,0,0.3);
-  --shadow-glow: 0 0 0 1px var(--accent-b), 0 8px 32px var(--accent-glow);
+  /* ── Shadows ── */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-glow: 0 0 0 1px var(--accent-b), 0 4px 16px var(--accent-glow);
 }
 
 body {
@@ -47,12 +57,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-button  { cursor: pointer; font-family: inherit; border: none; outline: none; }
-a       { text-decoration: none; color: inherit; }
+button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+a      { text-decoration: none; color: inherit; }
 
 ::selection { background: var(--accent); color: #fff; }
 
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.25); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.45); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
