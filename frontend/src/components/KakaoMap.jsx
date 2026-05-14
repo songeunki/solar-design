@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-const APP_KEY = '1a26482813f863a4da8896cde91a820e'
+const APP_KEY = import.meta.env.VITE_KAKAO_JS_APP_KEY || '1a26482813f863a4da8896cde91a820e'
 
 function loadKakaoScript() {
   return new Promise((resolve) => {

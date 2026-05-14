@@ -10,8 +10,7 @@ venv/
 output/reports/
 output/*.png
 
-# API 키 포함 설정 파일 (config.example.py를 복사해서 사용)
-config.py
+# 로컬 개발용 시크릿 (.env.example 참고)
 .env
 
 # Frontend build artifacts

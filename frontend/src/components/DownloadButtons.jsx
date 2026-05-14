@@ -1,5 +1,3 @@
-const API = 'http://localhost:8001'
-
 function extractFilename(path) {
   if (!path) return null
   return path.replace(/\\/g, '/').split('/').pop()
@@ -7,7 +5,7 @@ function extractFilename(path) {
 
 function downloadUrl(path) {
   const name = extractFilename(path)
-  return name ? `${API}/files/${name}` : null
+  return name ? `/files/${name}` : null
 }
 
 export default function DownloadButtons({ htmlPath, pdfPath }) {

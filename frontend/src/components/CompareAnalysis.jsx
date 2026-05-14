@@ -4,7 +4,8 @@ import ProgressBar from './ProgressBar'
 import ResultCards from './ResultCards'
 import MonthlyChart from './MonthlyChart'
 
-const WS_URL = 'ws://localhost:8001/ws/analyze'
+const _proto  = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const WS_URL  = `${_proto}//${window.location.host}/ws/analyze`
 
 function emptyEntry() {
   return { id: Date.now() + Math.random(), value: '', state: 'idle', progress: null, result: null, error: '' }

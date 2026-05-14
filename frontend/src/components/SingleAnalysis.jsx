@@ -4,7 +4,8 @@ import ProgressBar from './ProgressBar'
 import ResultCards from './ResultCards'
 import KakaoMap from './KakaoMap'
 
-const WS_URL = 'ws://localhost:8001/ws/analyze'
+const _proto  = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const WS_URL  = `${_proto}//${window.location.host}/ws/analyze`
 
 export default function SingleAnalysis() {
   const [address,      setAddress]      = useState('')
