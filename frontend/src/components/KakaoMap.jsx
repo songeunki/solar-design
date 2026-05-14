@@ -68,8 +68,10 @@ export default function KakaoMap({ onAddressSelect, markerLatLng, markerResult }
       if (!containerRef.current || mapRef.current) return
       const map = new window.kakao.maps.Map(containerRef.current, {
         center: new window.kakao.maps.LatLng(37.5665, 126.978),
-        level: 5,
+        level:  5,
       })
+      // 기본 밝은 지도 스타일 명시 (다크 테마 오염 방지)
+      map.setMapTypeId(window.kakao.maps.MapTypeId.ROADMAP)
       mapRef.current = map
 
       window.kakao.maps.event.addListener(map, 'click', (e) => {
