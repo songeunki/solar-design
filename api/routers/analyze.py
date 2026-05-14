@@ -77,21 +77,39 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
     except BuildingAPIError as e:
         result["steps"]["kakao_pnu"] = {"status": "error", "error": str(e)}
 
-    # Step 4: 건축물대장 API (PNU 확보된 경우)
-    if pnu:
-        try:
-            item = _fetch_building_item(pnu)
-            result["steps"]["building_api"] = {
-                "status":   "ok",
-                "archArea": item.get("archArea"),
-                "totArea":  item.get("totArea"),
-                "grndFlrCnt": item.get("grndFlrCnt"),
-                "mainPurpsCdNm": item.get("mainPurpsCdNm"),
-                "roofCdNm": item.get("roofCdNm"),
-                "strctCdNm": item.get("strctCdNm"),
-            }
-        except BuildingAPIError as e:
-            result["steps"]["building_api"] = {"status": "error", "error": str(e)}
+    # Step 4: 건축물대장 API — 일반표제부 / 총괄표제부 각각 테스트
+    best_pnu = kakao_pnu or pnu
+    if best_pnu:
+        from data_collector.building_api import (
+            _call_building_api, BUILDING_TITLE_URL, BUILDING_RECAP_URL,
+        )
+        base_params = {
+            "serviceKey": BUILDING_API_KEY,
+            "sigunguCd":  best_pnu[0:5],
+            "bjdongCd":   best_pnu[5:10],
+            "bun":        best_pnu[11:15],
+            "ji":         best_pnu[15:19],
+            "_type":      "json",
+            "numOfRows":  10,
+        }
+
+        for api_name, url in [
+            ("일반표제부(getBrTitleInfo)",   BUILDING_TITLE_URL),
+            ("총괄표제부(getBrRecapTitleInfo)", BUILDING_RECAP_URL),
+        ]:
+            try:
+                item = _call_building_api(url, base_params)
+                result["steps"][api_name] = {
+                    "status": "ok",
+                    "archArea":       item.get("archArea"),
+                    "totArea":        item.get("totArea"),
+                    "grndFlrCnt":     item.get("grndFlrCnt"),
+                    "mainPurpsCdNm":  item.get("mainPurpsCdNm"),
+                    "roofCdNm":       item.get("roofCdNm"),
+                    "strctCdNm":      item.get("strctCdNm"),
+                }
+            except BuildingAPIError as e:
+                result["steps"][api_name] = {"status": "error", "error": str(e)}
     else:
         result["steps"]["building_api"] = {"status": "skip", "reason": "PNU 확보 실패"}
 

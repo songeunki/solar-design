@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 from data_collector.address_api import Location
 from config import BUILDING_API_KEY, JUSO_API_KEY, KAKAO_REST_API_KEY
 
-BUILDING_REGISTRY_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
-JUSO_API_URL          = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
+BUILDING_TITLE_URL  = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
+BUILDING_RECAP_URL  = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrRecapTitleInfo"
+JUSO_API_URL        = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
 KAKAO_ADDRESS_URL     = "https://dapi.kakao.com/v2/local/search/address.json"
 OVERPASS_URL          = "https://overpass-api.de/api/interpreter"
 
@@ -159,39 +160,57 @@ def _pnu_via_kakao(address: str) -> str:
 # ── 건축물대장 API ─────────────────────────────────────────────────────────────
 
 def _fetch_building_item(pnu: str) -> dict:
-    """PNU → 건축HUB getBrTitleInfo 표제부 조회."""
+    """PNU → 건축HUB API 조회.
+
+    시도 순서:
+    1. 일반건축물대장 표제부 (getBrTitleInfo)
+    2. 총괄표제부 (getBrRecapTitleInfo) — 집합건물·대형건물은 여기에만 있음
+
+    platGbCd(산여부)는 전달하지 않음: 원래 작동 테스트에 없었고,
+    명시하면 오히려 일부 건물이 필터링되어 결과 없음 발생.
+    """
     if not BUILDING_API_KEY:
         raise BuildingAPIError("BUILDING_API_KEY 미설정")
 
-    params = {
+    base = {
         "serviceKey": BUILDING_API_KEY,
-        "platGbCd":   pnu[10],      # 산여부: 0=대지, 1=산 (PNU 11번째 자리)
         "sigunguCd":  pnu[0:5],
         "bjdongCd":   pnu[5:10],
-        "bun":        pnu[11:15],   # 본번 (산여부 다음 4자리)
-        "ji":         pnu[15:19],   # 부번
+        "bun":        pnu[11:15],
+        "ji":         pnu[15:19],
         "_type":      "json",
-        "numOfRows":  1,
+        "numOfRows":  10,
     }
-    return _call_building_api(params)
 
-
-def _call_building_api(params: dict) -> dict:
+    # 1차: 일반건축물대장 표제부
     try:
-        resp = requests.get(BUILDING_REGISTRY_URL, params=params, timeout=12)
+        return _call_building_api(BUILDING_TITLE_URL, base)
+    except BuildingAPIError as e1:
+        title_err = str(e1)
+
+    # 2차: 총괄표제부
+    try:
+        return _call_building_api(BUILDING_RECAP_URL, base)
+    except BuildingAPIError as e2:
+        raise BuildingAPIError(
+            f"일반표제부: {title_err} | 총괄표제부: {e2}"
+        ) from e2
+
+
+def _call_building_api(url: str, params: dict) -> dict:
+    try:
+        resp = requests.get(url, params=params, timeout=12)
         resp.raise_for_status()
     except requests.RequestException as e:
-        raise BuildingAPIError(f"건축물대장 API 호출 실패: {e}") from e
+        raise BuildingAPIError(f"건축물대장 API 호출 실패 ({url.split('/')[-1]}): {e}") from e
 
     if not resp.content:
-        raise BuildingAPIError("건축물대장 API 응답 비어 있음 — 인코딩 키 여부 확인")
+        raise BuildingAPIError("응답 비어 있음 — 인코딩 키 여부 확인")
 
     try:
         data = resp.json()
     except Exception:
-        # XML 오류 응답 (OpenAPI 공통 오류 메시지)
-        text = resp.text[:300]
-        raise BuildingAPIError(f"건축물대장 API JSON 파싱 실패: {text}")
+        raise BuildingAPIError(f"JSON 파싱 실패: {resp.text[:300]}")
 
     items = (
         data.get("response", {})
@@ -201,8 +220,9 @@ def _call_building_api(params: dict) -> dict:
     )
     if not items:
         result_code = data.get("response", {}).get("header", {}).get("resultCode", "")
+        result_msg  = data.get("response", {}).get("header", {}).get("resultMsg", "")
         raise BuildingAPIError(
-            f"건축물대장 데이터 없음 (resultCode={result_code})"
+            f"데이터 없음 (resultCode={result_code}, msg={result_msg})"
         )
     return items if isinstance(items, dict) else items[0]
 
