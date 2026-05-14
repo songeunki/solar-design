@@ -6,8 +6,9 @@ __pycache__/
 venv/
 *.egg-info/
 
-# 생성 보고서 (대용량, 재생성 가능)
+# 생성 보고서 및 테스트 스크린샷 (재생성 가능)
 output/reports/
+output/*.png
 
 # API 키 포함 설정 파일 (config.example.py를 복사해서 사용)
 config.py
