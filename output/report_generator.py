@@ -82,26 +82,51 @@ class ReportGenerator:
 
 
 def _fetch_static_map(lat: float, lng: float) -> str | None:
-    """카카오 정적 지도 API로 이미지 취득 후 base64 반환. 실패 시 None."""
-    try:
-        from config import KAKAO_REST_API_KEY
-        if not KAKAO_REST_API_KEY:
-            return None
-        resp = requests.get(
-            "https://dapi.kakao.com/v2/maps/staticmap",
-            params={
-                "center":  f"{lng},{lat}",
-                "level":   3,
-                "size":    "640x280",
-                "markers": f"color:red|{lng},{lat}",
-            },
-            headers={"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return base64.b64encode(resp.content).decode()
-    except Exception:
+    """Playwright로 카카오 지도를 렌더링해 스크린샷 → base64 반환. 실패 시 None."""
+    if not _PLAYWRIGHT_OK:
         return None
+    try:
+        from config import KAKAO_JS_APP_KEY
+    except ImportError:
+        KAKAO_JS_APP_KEY = ""
+    if not KAKAO_JS_APP_KEY:
+        try:
+            from config import KAKAO_REST_API_KEY as KAKAO_JS_APP_KEY  # fallback
+        except ImportError:
+            return None
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>html,body,#m{{width:640px;height:280px;margin:0;padding:0;overflow:hidden}}</style>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_APP_KEY}&autoload=false"></script>
+</head><body><div id="m"></div><script>
+kakao.maps.load(function(){{
+    var map=new kakao.maps.Map(document.getElementById('m'),
+        {{center:new kakao.maps.LatLng({lat},{lng}),level:3}});
+    new kakao.maps.Marker({{position:new kakao.maps.LatLng({lat},{lng}),map:map}});
+    setTimeout(function(){{document.title='ready';}},1800);
+}});
+</script></body></html>"""
+
+    import tempfile
+    tmp = pathlib.Path(tempfile.mktemp(suffix=".html"))
+    tmp.write_text(html, encoding="utf-8")
+    try:
+        with _sync_playwright() as pw:
+            browser = pw.chromium.launch(
+                args=["--disable-web-security", "--no-sandbox"]
+            )
+            page = browser.new_page(viewport={"width": 640, "height": 280})
+            page.goto(tmp.as_uri(), wait_until="domcontentloaded")
+            page.wait_for_function("document.title==='ready'", timeout=12000)
+            img = page.screenshot()
+            browser.close()
+        return base64.b64encode(img).decode()
+    except Exception as e:
+        warnings.warn(f"카카오 지도 스크린샷 실패: {e}", stacklevel=2)
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _write_pdf(html_str: str, dest: pathlib.Path) -> str | None:

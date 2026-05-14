@@ -5,7 +5,8 @@
 VWORLD_API_KEY     = ""  # https://www.vworld.kr 에서 발급
 BUILDING_API_KEY   = ""  # https://www.data.go.kr 에서 발급 (건축HUB 건축물대장)
 JUSO_API_KEY       = ""  # https://www.juso.go.kr 에서 발급 (도로명→지번 변환)
-KAKAO_REST_API_KEY = ""  # https://developers.kakao.com 에서 발급 (정적 지도 보고서 삽입)
+KAKAO_REST_API_KEY = ""  # https://developers.kakao.com 에서 발급 (REST API 키)
+KAKAO_JS_APP_KEY   = ""  # https://developers.kakao.com 에서 발급 (JavaScript 키, 보고서 지도 삽입)
 
 API_KEYS = {
     "address":  VWORLD_API_KEY,
