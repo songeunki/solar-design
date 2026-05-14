@@ -63,19 +63,22 @@ class BuildingAPI:
 # ── PNU 추출 ───────────────────────────────────────────────────────────────────
 
 def _get_pnu(address: str) -> str:
-    """Juso API → Kakao REST API 순으로 19자리 PNU 반환.
+    """Kakao REST API → Juso API 순으로 19자리 PNU 반환.
 
-    NOTE: VWorld getcoord 응답의 level4LC는 법정동코드(10자리)라
-    PNU(19자리)로 사용할 수 없으므로 제외.
+    Kakao를 우선 사용하는 이유:
+    - Juso API의 bdMgtSn은 산여부(11번째 자리)가 부정확한 경우가 있음
+      (예: 도심 일반지번인데 산여부=1 반환 → 건축물대장 조회 실패)
+    - Kakao는 b_code + mountain_yn으로 명시적으로 구분하므로 더 정확
+    NOTE: VWorld getcoord의 level4LC는 법정동코드(10자리)라 PNU(19자리) 불가, 제외.
     """
-    # 1단계: Juso API (bdMgtSn 앞 19자리 = PNU)
+    # 1단계: Kakao REST API (b_code + 산여부 + 본번 + 부번 명시적 조합)
     try:
-        return _pnu_via_juso(address)
+        return _pnu_via_kakao(address)
     except BuildingAPIError:
         pass
 
-    # 2단계: Kakao REST API (b_code + 산여부 + 본번 + 부번 조합)
-    return _pnu_via_kakao(address)
+    # 2단계: Juso API (bdMgtSn 앞 19자리)
+    return _pnu_via_juso(address)
 
 
 def _pnu_via_juso(address: str) -> str:
@@ -241,7 +244,7 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
 
 # ── OSM Overpass 면적 추정 ─────────────────────────────────────────────────────
 
-def _building_area_from_osm(lat: float, lng: float, radius_m: int = 30) -> float | None:
+def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float | None:
     """OSM Overpass API로 좌표 주변 건물 폴리곤 면적(㎡) 추출.
 
     무료, API키 불필요, 해외 서버(Railway)에서도 접근 가능.
