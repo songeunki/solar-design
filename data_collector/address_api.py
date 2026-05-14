@@ -1,8 +1,10 @@
+import warnings
 import requests
 from dataclasses import dataclass
-from config import VWORLD_API_KEY
+from config import VWORLD_API_KEY, KAKAO_REST_API_KEY
 
-VWORLD_GEOCODE_URL = "https://api.vworld.kr/req/address"
+VWORLD_GEOCODE_URL  = "https://api.vworld.kr/req/address"
+KAKAO_GEOCODE_URL   = "https://dapi.kakao.com/v2/local/search/address.json"
 
 
 @dataclass
@@ -19,24 +21,42 @@ class AddressAPIError(Exception):
 
 
 class AddressAPI:
-    """VWorld 지오코더 API로 주소 → 위도/경도 변환 (도로명·지번 모두 지원)"""
+    """주소 → 위도/경도 변환. VWorld 우선, 실패 시 Kakao REST API 폴백."""
 
     def get_coordinates(self, address: str) -> Location:
-        # 도로명 우선, 결과 없으면 지번으로 재시도
+        # 1단계: VWorld (도로명 → 지번)
+        vworld_fail_reason = ""
         for addr_type in ("road", "parcel"):
-            data = _vworld_request(address, addr_type)
-            if data.get("response", {}).get("status") == "OK":
-                point = data["response"]["result"]["point"]
-                sido, sigungu = _parse_sido_sigungu(address)
-                return Location(
-                    address=address,
-                    lat=float(point["y"]),
-                    lng=float(point["x"]),
-                    sido=sido,
-                    sigungu=sigungu,
-                )
+            try:
+                data = _vworld_request(address, addr_type)
+                if data.get("response", {}).get("status") == "OK":
+                    point = data["response"]["result"]["point"]
+                    sido, sigungu = _parse_sido_sigungu(address)
+                    return Location(
+                        address=address,
+                        lat=float(point["y"]),
+                        lng=float(point["x"]),
+                        sido=sido,
+                        sigungu=sigungu,
+                    )
+            except AddressAPIError as e:
+                # 네트워크·HTTP 오류 → 지번 재시도 없이 바로 폴백
+                vworld_fail_reason = str(e)
+                break
 
-        raise AddressAPIError(f"주소를 찾을 수 없습니다: '{address}'")
+        # 2단계: Kakao REST API 폴백
+        warnings.warn(
+            f"[AddressAPI] VWorld 실패({vworld_fail_reason or '결과 없음'}), "
+            "Kakao REST API로 폴백합니다.",
+            stacklevel=2,
+        )
+        loc = _kakao_geocode(address)
+        if loc:
+            return loc
+
+        raise AddressAPIError(
+            f"주소 좌표를 찾을 수 없습니다 (VWorld·Kakao 모두 실패): '{address}'"
+        )
 
 
 def _vworld_request(address: str, addr_type: str) -> dict:
@@ -56,6 +76,34 @@ def _vworld_request(address: str, addr_type: str) -> dict:
         return resp.json()
     except requests.RequestException as e:
         raise AddressAPIError(f"VWorld API 호출 실패: {e}") from e
+
+
+def _kakao_geocode(address: str) -> Location | None:
+    """Kakao REST API로 주소 → 좌표 변환. 실패 시 None 반환."""
+    try:
+        if not KAKAO_REST_API_KEY:
+            return None
+        resp = requests.get(
+            KAKAO_GEOCODE_URL,
+            params={"query": address, "size": 1},
+            headers={"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        docs = resp.json().get("documents", [])
+        if not docs:
+            return None
+        doc = docs[0]
+        sido, sigungu = _parse_sido_sigungu(address)
+        return Location(
+            address=address,
+            lat=float(doc["y"]),
+            lng=float(doc["x"]),
+            sido=sido,
+            sigungu=sigungu,
+        )
+    except Exception:
+        return None
 
 
 def _parse_sido_sigungu(address: str) -> tuple[str, str]:
