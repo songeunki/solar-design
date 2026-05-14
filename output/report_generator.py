@@ -133,23 +133,33 @@ def _write_pdf(html_str: str, dest: pathlib.Path) -> str | None:
     if not _PLAYWRIGHT_OK:
         warnings.warn("playwright를 불러올 수 없어 PDF 생성을 건너뜁니다.", stacklevel=2)
         return None
+    import tempfile, shutil
+    # set_content()는 대용량 HTML(base64 이미지 포함)에서 PDF가 깨지므로
+    # HTML을 임시 파일로 저장 → file:// goto → 별도 ASCII 경로에 PDF 저장 → 최종 경로로 이동
+    tmp_html = pathlib.Path(tempfile.mktemp(suffix=".html"))
+    tmp_pdf  = pathlib.Path(tempfile.mktemp(suffix=".pdf"))
+    tmp_html.write_text(html_str, encoding="utf-8")
     try:
         with _sync_playwright() as pw:
             browser = pw.chromium.launch()
             page = browser.new_page()
-            page.set_content(html_str, wait_until="networkidle")
+            page.goto(tmp_html.as_uri(), wait_until="networkidle")
             page.pdf(
-                path=str(dest),
+                path=str(tmp_pdf),
                 format="A4",
                 margin={"top": "16mm", "bottom": "16mm",
                         "left": "14mm", "right": "14mm"},
                 print_background=True,
             )
             browser.close()
+        shutil.move(str(tmp_pdf), str(dest))
         return str(dest)
     except Exception as e:
         warnings.warn(f"PDF 생성 실패: {e}", stacklevel=2)
         return None
+    finally:
+        tmp_html.unlink(missing_ok=True)
+        tmp_pdf.unlink(missing_ok=True)
 
 
 # ── 내부 함수 ─────────────────────────────────────────────────────────────────
