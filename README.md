@@ -10,14 +10,15 @@
 
 | 기능 | 설명 |
 |---|---|
+| 카카오맵 연동 | 지도 클릭 → 역지오코딩으로 주소 자동 입력, 분석 완료 후 마커·인포윈도우 표시 |
 | 주소 자동 변환 | 도로명·지번 주소 모두 지원. VWorld → Juso API 순으로 PNU 추출 |
-| 건축물대장 조회 | 건축HUB API로 지붕 면적·형태·구조·층수 자동 수집 |
+| 건축물대장 조회 | 건축HUB API로 지붕 면적·형태·구조·층수 자동 수집 (archArea 없는 건물은 연면적 추정) |
 | 일사량 수집 | NASA POWER API로 위치별 월별 일사량·기온 climatology 수집 (API 키 불필요) |
 | 지붕 분석 | 위도 기반 태양 고도각, 동지 무음영 GCR, 방위각 보정계수 계산 |
 | 전기 설계 | 용량 산정, 표준 인버터 선정, 직병렬 구성, KEC 배선 사양 |
 | 구조 설계 | KBC 2022 풍·적설 하중, 마운팅 방식, 앙카 사양 |
-| 보고서 생성 | HTML + JSON + PDF (Playwright/Chromium) |
-| 비교 보고서 | 여러 주소를 한 번에 분석해 항목별 비교표 생성 |
+| 보고서 생성 | 카카오 지도 이미지 + HTML + JSON + PDF (Playwright/Chromium) |
+| 비교 보고서 | 여러 주소를 병렬 분석해 항목별 비교표 생성 |
 
 ---
 
@@ -40,12 +41,20 @@ cp config.example.py config.py
 
 ```python
 # config.py
-VWORLD_API_KEY   = "..."   # https://www.vworld.kr
-BUILDING_API_KEY = "..."   # https://www.data.go.kr  (건축HUB 건축물대장 API)
-JUSO_API_KEY     = "..."   # https://www.juso.go.kr  (도로명주소 개발자센터)
+VWORLD_API_KEY    = "..."   # https://www.vworld.kr
+BUILDING_API_KEY  = "..."   # https://www.data.go.kr  (건축HUB 건축물대장 API)
+JUSO_API_KEY      = "..."   # https://www.juso.go.kr  (도로명주소 개발자센터)
+KAKAO_REST_API_KEY = "..."  # https://developers.kakao.com  (REST API 키)
+KAKAO_JS_APP_KEY  = "..."   # https://developers.kakao.com  (JavaScript 키)
 ```
 
 > **NASA POWER API**는 별도 키 없이 사용 가능합니다.
+
+### 3. 카카오 개발자 콘솔 설정
+
+[카카오 개발자 콘솔](https://developers.kakao.com)에서 앱 생성 후:
+
+- **앱 설정 → 플랫폼 → Web**: `http://localhost:5173` 등록 (지도 SDK 사용 허용)
 
 ---
 
@@ -77,7 +86,9 @@ npm run dev
 
 | 기능 | 설명 |
 |---|---|
-| 주소 입력창 | 도로명·지번 자동 감지 배지, 엔터키 지원 |
+| 카카오맵 (좌측 60%) | 지도 클릭 → 역지오코딩으로 주소 자동 입력 |
+| 분석 완료 인포윈도우 | 지도 마커에 건물명·시스템 용량·연간 발전량·회수기간 팝업 표시 |
+| 주소 입력창 (우측 40%) | 도로명·지번 자동 감지 배지, 엔터키 지원 |
 | 실시간 프로그레스 | WebSocket으로 1/5~5/5 단계 실시간 표시 |
 | 결과 카드 | 시스템 용량·연간 발전량·설치비·회수기간·CO₂ 저감 |
 | 월별 발전량 차트 | SVG 막대 차트 (최대·최소 색상 강조) |
@@ -108,8 +119,8 @@ python main.py --address "서울특별시 강남구 테헤란로 521"
 [3/5] 기상 데이터 수집
 [4/5] 지붕 분석 및 설계
 [5/5] 보고서 생성
-HTML: output/reports/서울특별시_강남구_삼성동_169_20260512_163508.html
-PDF : output/reports/서울특별시_강남구_삼성동_169_20260512_163508.pdf
+HTML: output/reports/서울특별시_강남구_삼성동_169_20260514_163508.html
+PDF : output/reports/서울특별시_강남구_삼성동_169_20260514_163508.pdf
 ```
 
 ### 다중 주소 비교
@@ -126,8 +137,8 @@ python main.py --compare "서울특별시 강남구 삼성동 169" "서울특별
        → 1,054장 / 421.6 kWp / 499,338 kWh/년
 
 [비교 보고서 생성]
-HTML: output/reports/comparison_20260512_164749.html
-PDF : output/reports/comparison_20260512_164749.pdf
+HTML: output/reports/comparison_20260514_164749.html
+PDF : output/reports/comparison_20260514_164749.pdf
 ```
 
 ---
@@ -138,6 +149,8 @@ PDF : output/reports/comparison_20260512_164749.pdf
 
 | 섹션 | 내용 |
 |---|---|
+| 지도 이미지 | Playwright로 캡처한 카카오 지도 (건물 위치 마커 포함) |
+| KPI 카드 | 패널 수·시스템 용량·연간 발전량·회수기간·CO₂ 저감 |
 | 1. 건물 정보 | 건축물대장 기반 유형·층수·면적·구조 |
 | 2. 지붕 분석 | 절기별 태양 고도각, GCR, 방위각 보정계수, 음영 손실 |
 | 3. 태양광 시스템 | 패널 수·용량·인버터·직병렬 구성·배선 사양 |
@@ -146,13 +159,9 @@ PDF : output/reports/comparison_20260512_164749.pdf
 | 6. 경제성 분석 | 설치비·절감액·회수 기간·CO₂ 저감 |
 | 7. 특이사항 | 구조 검토 필요 항목 등 |
 
-![단일 설계 보고서 스크린샷](docs/report_screenshot.png)
-
 ### 비교 보고서
 
 건물별 KPI 요약 카드 + 항목별 비교 테이블 (최우수 값 녹색·최하위 값 빨간색 강조)
-
-![비교 보고서 스크린샷](docs/comparison_screenshot.png)
 
 ---
 
@@ -197,19 +206,20 @@ solar-design/
 ├── frontend/                    # Vite + React 프론트엔드
 │   ├── src/
 │   │   ├── App.jsx              # 탭 네비게이션
-│   │   ├── components/
-│   │   │   ├── SingleAnalysis.jsx   # 단일 건물 분석 페이지
-│   │   │   ├── CompareAnalysis.jsx  # 복수 건물 비교 페이지
-│   │   │   ├── AddressInput.jsx     # 주소 입력 + 자동 감지 배지
-│   │   │   ├── ProgressBar.jsx      # WebSocket 프로그레스
-│   │   │   ├── ResultCards.jsx      # 결과 카드 + 테이블
-│   │   │   ├── MonthlyChart.jsx     # SVG 막대 차트
-│   │   │   └── DownloadButtons.jsx  # HTML/PDF 다운로드
-│   │   └── App.css              # amber/orange 디자인 시스템
+│   │   ├── App.css              # amber/orange 디자인 시스템 + split 레이아웃
+│   │   └── components/
+│   │       ├── KakaoMap.jsx         # 카카오맵 (클릭 역지오코딩, 인포윈도우)
+│   │       ├── SingleAnalysis.jsx   # 단일 건물 분석 (지도 60% / 입력·결과 40%)
+│   │       ├── CompareAnalysis.jsx  # 복수 건물 비교 분석
+│   │       ├── AddressInput.jsx     # 주소 입력 + 자동 감지 배지
+│   │       ├── ProgressBar.jsx      # WebSocket 프로그레스
+│   │       ├── ResultCards.jsx      # 결과 카드 + 테이블
+│   │       ├── MonthlyChart.jsx     # SVG 막대 차트
+│   │       └── DownloadButtons.jsx  # HTML/PDF 다운로드
 │   └── package.json
 ├── data_collector/
 │   ├── address_api.py           # VWorld 지오코딩 (도로명·지번)
-│   ├── building_api.py          # 건축HUB + Juso API
+│   ├── building_api.py          # 건축HUB + Juso API (archArea 없는 건물 추정 포함)
 │   └── weather_api.py           # NASA POWER API
 ├── analyzer/
 │   └── roof_analyzer.py         # 태양 고도각·GCR·방위각 분석
@@ -217,7 +227,7 @@ solar-design/
 │   ├── electrical.py            # 전기 설계
 │   └── structural.py            # 구조 설계 (KBC 2022)
 └── output/
-    ├── report_generator.py      # HTML / PDF / 비교 보고서 생성
+    ├── report_generator.py      # HTML / PDF / 비교 보고서 + 카카오 지도 캡처
     └── reports/                 # 생성된 보고서 저장 (gitignore)
 ```
 
@@ -264,4 +274,5 @@ factor = 0.85 + 0.15 × cos(azimuth − 180°)
 | [VWorld 지오코더](https://www.vworld.kr) | 주소 → 좌표·PNU | ✅ |
 | [건축HUB 건축물대장](https://www.data.go.kr) | 건물 정보 조회 | ✅ |
 | [도로명주소 Juso](https://www.juso.go.kr) | 도로명 → PNU 변환 | ✅ |
+| [카카오 Maps JS SDK](https://developers.kakao.com) | 지도 표시·역지오코딩·보고서 지도 캡처 | ✅ |
 | [NASA POWER](https://power.larc.nasa.gov) | 일사량·기온 climatology | ❌ |
