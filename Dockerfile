@@ -16,12 +16,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Playwright Chromium + 시스템 의존성 설치
 RUN playwright install --with-deps chromium
 
-# 프론트엔드 의존성 설치 (package.json 변경 시에만 재실행)
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci --prefer-offline
+# 프론트엔드 의존성 설치 (package.json만 먼저 복사해 레이어 캐시 활용)
+COPY frontend/package.json ./frontend/
+RUN cd frontend && npm install --no-package-lock
 
-# 프론트엔드 소스 복사 및 빌드
-COPY frontend/ ./frontend/
+# 프론트엔드 소스 복사 및 빌드 (node_modules는 위 레이어에서 설치됨)
+COPY frontend/src ./frontend/src
+COPY frontend/index.html frontend/vite.config.js ./frontend/
 RUN cd frontend && npm run build
 
 # 애플리케이션 코드 복사
