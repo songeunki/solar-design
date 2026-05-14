@@ -25,7 +25,7 @@ API_KEYS = {
 }
 
 DEFAULTS = {
-    "panel_watt":       400,
+    "panel_watt":       640,
     "panel_efficiency": 0.20,
     "system_loss":      0.14,
     "panel_width_m":    1.134,
