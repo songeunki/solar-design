@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from data_collector.address_api import Location
 from data_collector.building_api import (
     BuildingAPI, BuildingAPIError,
-    _get_pnu, _pnu_via_juso, _call_building_api, _parse_item, _fallback_info,
+    _get_pnu, _pnu_via_juso, _pnu_via_kakao, _call_building_api, _parse_item, _fallback_info,
 )
 
 SAMPLE_LOCATION = Location(
@@ -76,16 +76,44 @@ class TestGetPnu:
 
         assert _get_pnu(SAMPLE_LOCATION) == PNU_19
 
+    @patch("data_collector.building_api._pnu_via_kakao")
     @patch("data_collector.building_api._pnu_via_juso")
     @patch("data_collector.building_api.requests.get")
-    def test_juso_fallback(self, mock_get, mock_juso):
-        """VWorld 모두 실패 → Juso API fallback."""
+    def test_juso_fallback(self, mock_get, mock_juso, mock_kakao):
+        """VWorld 모두 NOT_FOUND → Juso API fallback."""
         mock_get.return_value.raise_for_status = MagicMock()
         mock_get.return_value.json.return_value = _vworld_pnu_resp("")
         mock_juso.return_value = PNU_19
 
         assert _get_pnu(SAMPLE_LOCATION) == PNU_19
         mock_juso.assert_called_once_with(SAMPLE_LOCATION.address)
+        mock_kakao.assert_not_called()
+
+    @patch("data_collector.building_api._pnu_via_kakao")
+    @patch("data_collector.building_api._pnu_via_juso")
+    @patch("data_collector.building_api.requests.get")
+    def test_vworld_http_error_kakao_fallback(self, mock_get, mock_juso, mock_kakao):
+        """VWorld HTTP 오류 + Juso 실패 → Kakao fallback."""
+        from requests.exceptions import HTTPError
+        mock_get.return_value.raise_for_status.side_effect = HTTPError("502")
+        mock_juso.side_effect = BuildingAPIError("Juso 실패")
+        mock_kakao.return_value = PNU_19
+
+        assert _get_pnu(SAMPLE_LOCATION) == PNU_19
+        mock_kakao.assert_called_once_with(SAMPLE_LOCATION.address)
+
+    @patch("data_collector.building_api._pnu_via_kakao")
+    @patch("data_collector.building_api._pnu_via_juso")
+    @patch("data_collector.building_api.requests.get")
+    def test_juso_fail_kakao_fallback(self, mock_get, mock_juso, mock_kakao):
+        """VWorld NOT_FOUND + Juso 실패 → Kakao fallback."""
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = _vworld_pnu_resp("")
+        mock_juso.side_effect = BuildingAPIError("Juso 키 없음")
+        mock_kakao.return_value = PNU_19
+
+        assert _get_pnu(SAMPLE_LOCATION) == PNU_19
+        mock_kakao.assert_called_once_with(SAMPLE_LOCATION.address)
 
 
 # ── _pnu_via_juso ─────────────────────────────────────────────────────────────
@@ -125,6 +153,63 @@ class TestPnuViaJuso:
 
         with pytest.raises(BuildingAPIError, match="Juso API 오류"):
             _pnu_via_juso("서울특별시 강남구 테헤란로 521")
+
+
+def _kakao_addr_resp(b_code="1168010500", mountain_yn="N",
+                     main_no="0169", sub_no="0000") -> dict:
+    return {
+        "documents": [{
+            "address": {
+                "b_code": b_code,
+                "mountain_yn": mountain_yn,
+                "main_address_no": main_no,
+                "sub_address_no": sub_no,
+            }
+        }]
+    }
+
+
+# ── _pnu_via_kakao ────────────────────────────────────────────────────────────
+
+class TestPnuViaKakao:
+    @patch("data_collector.building_api.requests.get")
+    @patch("data_collector.building_api.KAKAO_REST_API_KEY", "test-key")
+    def test_success(self, mock_get):
+        """정상 응답 → 19자리 PNU 반환."""
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = _kakao_addr_resp()
+
+        pnu = _pnu_via_kakao("서울특별시 강남구 삼성동 169")
+        assert len(pnu) == 19
+        assert pnu == "1168010500" + "0" + "0169" + "0000"
+
+    @patch("data_collector.building_api.KAKAO_REST_API_KEY", "")
+    def test_no_key_raises(self):
+        """키 없으면 BuildingAPIError."""
+        with pytest.raises(BuildingAPIError, match="KAKAO_REST_API_KEY"):
+            _pnu_via_kakao("서울특별시 강남구 삼성동 169")
+
+    @patch("data_collector.building_api.requests.get")
+    @patch("data_collector.building_api.KAKAO_REST_API_KEY", "test-key")
+    def test_empty_docs_raises(self, mock_get):
+        """documents 빈 배열 → BuildingAPIError."""
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = {"documents": []}
+
+        with pytest.raises(BuildingAPIError, match="결과 없음"):
+            _pnu_via_kakao("없는주소")
+
+    @patch("data_collector.building_api.requests.get")
+    @patch("data_collector.building_api.KAKAO_REST_API_KEY", "test-key")
+    def test_mountain_address(self, mock_get):
+        """산 주소(mountain_yn=Y) → PNU 산여부 비트 1."""
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = _kakao_addr_resp(
+            mountain_yn="Y", main_no="0042", sub_no="0000"
+        )
+
+        pnu = _pnu_via_kakao("산 주소 테스트")
+        assert pnu[10] == "1"
 
 
 # ── _call_building_api ────────────────────────────────────────────────────────

@@ -2,11 +2,12 @@ import warnings
 import requests
 from dataclasses import dataclass, field
 from data_collector.address_api import Location
-from config import BUILDING_API_KEY, VWORLD_API_KEY, JUSO_API_KEY
+from config import BUILDING_API_KEY, VWORLD_API_KEY, JUSO_API_KEY, KAKAO_REST_API_KEY
 
 BUILDING_REGISTRY_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
 VWORLD_ADDRESS_URL    = "https://api.vworld.kr/req/address"
 JUSO_API_URL          = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
+KAKAO_ADDRESS_URL     = "https://dapi.kakao.com/v2/local/search/address.json"
 
 _PURPOSE_TO_TYPE: dict[str, str] = {
     "단독주택": "주거", "공동주택": "주거", "다세대주택": "주거", "다가구주택": "주거",
@@ -53,7 +54,9 @@ class BuildingAPI:
 # ── 내부 함수 ─────────────────────────────────────────────────────────────────
 
 def _get_pnu(location: Location) -> str:
-    """VWorld(도로명→지번 순) 조회 후 PNU가 없으면 Juso API로 재시도."""
+    """VWorld → Juso → Kakao REST API 순으로 PNU 추출."""
+    # 1단계: VWorld (도로명 → 지번)
+    vworld_network_err = False
     for addr_type in ("road", "parcel"):
         params = {
             "service": "address", "request": "getcoord", "version": "2.0",
@@ -64,8 +67,9 @@ def _get_pnu(location: Location) -> str:
             resp = requests.get(VWORLD_ADDRESS_URL, params=params, timeout=10)
             resp.raise_for_status()
             data = resp.json()
-        except requests.RequestException as e:
-            raise BuildingAPIError(f"VWorld 주소 조회 실패: {e}") from e
+        except requests.RequestException:
+            vworld_network_err = True
+            break  # 네트워크·HTTP 오류 → 재시도 없이 폴백
 
         if data.get("response", {}).get("status") != "OK":
             continue
@@ -79,8 +83,14 @@ def _get_pnu(location: Location) -> str:
         if len(pnu) == 19:
             return pnu
 
-    # VWorld에서 PNU를 얻지 못한 경우 Juso API로 도로명→건물관리번호 변환
-    return _pnu_via_juso(location.address)
+    # 2단계: Juso API
+    try:
+        return _pnu_via_juso(location.address)
+    except BuildingAPIError:
+        pass
+
+    # 3단계: Kakao REST API
+    return _pnu_via_kakao(location.address)
 
 
 def _pnu_via_juso(address: str) -> str:
@@ -119,6 +129,47 @@ def _pnu_via_juso(address: str) -> str:
     pnu = bd_mgt_sn[:19]
     if len(pnu) != 19:
         raise BuildingAPIError(f"Juso API bdMgtSn에서 PNU를 추출할 수 없습니다: '{address}'")
+    return pnu
+
+
+def _pnu_via_kakao(address: str) -> str:
+    """Kakao REST API 주소 검색으로 PNU를 구성한다.
+
+    PNU = b_code(10) + 산여부(1) + 본번(4) + 부번(4)
+    Kakao address 객체에서 b_code, mountain_yn, main/sub_address_no를 읽어 조합.
+    """
+    if not KAKAO_REST_API_KEY:
+        raise BuildingAPIError("KAKAO_REST_API_KEY가 설정되지 않아 Kakao PNU 조회를 건너뜁니다.")
+    try:
+        resp = requests.get(
+            KAKAO_ADDRESS_URL,
+            params={"query": address, "size": 1},
+            headers={"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        docs = resp.json().get("documents", [])
+    except requests.RequestException as e:
+        raise BuildingAPIError(f"Kakao 주소 조회 실패: {e}") from e
+
+    if not docs:
+        raise BuildingAPIError(f"Kakao 주소 검색 결과 없음: '{address}'")
+
+    addr = docs[0].get("address")  # 지번주소 정보
+    if not addr:
+        raise BuildingAPIError(f"Kakao 응답에 지번주소 정보 없음: '{address}'")
+
+    b_code = addr.get("b_code", "")
+    if len(b_code) < 10:
+        raise BuildingAPIError(f"Kakao b_code 형식 오류: '{b_code}'")
+
+    mountain  = "1" if addr.get("mountain_yn", "N") == "Y" else "0"
+    main_no   = (addr.get("main_address_no") or "0").zfill(4)
+    sub_no    = (addr.get("sub_address_no")  or "0").zfill(4)
+
+    pnu = b_code[:10] + mountain + main_no + sub_no
+    if len(pnu) != 19:
+        raise BuildingAPIError(f"Kakao PNU 구성 실패 (길이 {len(pnu)}): '{address}'")
     return pnu
 
 
