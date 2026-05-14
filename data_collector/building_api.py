@@ -1,13 +1,15 @@
+"""건축물대장 표제부 조회 — PNU 추출 → 건축HUB API → OSM 순으로 시도."""
+import math
 import warnings
 import requests
 from dataclasses import dataclass, field
 from data_collector.address_api import Location
-from config import BUILDING_API_KEY, VWORLD_API_KEY, JUSO_API_KEY, KAKAO_REST_API_KEY
+from config import BUILDING_API_KEY, JUSO_API_KEY, KAKAO_REST_API_KEY
 
 BUILDING_REGISTRY_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
-VWORLD_ADDRESS_URL    = "https://api.vworld.kr/req/address"
 JUSO_API_URL          = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
 KAKAO_ADDRESS_URL     = "https://dapi.kakao.com/v2/local/search/address.json"
+OVERPASS_URL          = "https://overpass-api.de/api/interpreter"
 
 _PURPOSE_TO_TYPE: dict[str, str] = {
     "단독주택": "주거", "공동주택": "주거", "다세대주택": "주거", "다가구주택": "주거",
@@ -20,13 +22,13 @@ _PURPOSE_TO_TYPE: dict[str, str] = {
 @dataclass
 class BuildingInfo:
     address: str
-    building_type: str      # 주거/상업/공업 등
+    building_type: str
     floors: int
     roof_area_m2: float
     roof_type: str          # 평지붕/경사지붕
-    roof_slope_deg: float   # 경사각 (도)
-    roof_azimuth_deg: float # 방위각 (0=북, 180=남)
-    structure: str          # 철근콘크리트/철골 등
+    roof_slope_deg: float
+    roof_azimuth_deg: float
+    structure: str
     extra: dict = field(default_factory=dict)
 
 
@@ -35,83 +37,64 @@ class BuildingAPIError(Exception):
 
 
 class BuildingAPI:
-    """VWorld 주소 → PNU 변환 후 건축HUB 건축물대장 표제부 조회"""
+    """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
     def get_building_info(self, location: Location) -> BuildingInfo:
+        # 1단계: 건축물대장 API (Juso→Kakao로 PNU 확보)
         try:
-            pnu  = _get_pnu(location)
+            pnu  = _get_pnu(location.address)
             item = _fetch_building_item(pnu)
             return _parse_item(location.address, item)
         except BuildingAPIError as e:
+            warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
+
+        # 2단계: OSM Overpass로 건물 면적만 추정
+        area = _building_area_from_osm(location.lat, location.lng)
+        if area:
             warnings.warn(
-                f"[BuildingAPI] {e} — 건축물대장 조회 실패, 기본값으로 대체합니다. "
-                "실제 운영 시 data.go.kr에서 유효한 BUILDING_API_KEY를 발급받으세요.",
+                f"[BuildingAPI] OSM 면적 사용: {area:.1f}㎡ ({location.address})",
                 stacklevel=2,
             )
-            return _fallback_info(location.address)
+            return _fallback_info(location.address, roof_area=area, area_source="OSM")
+
+        return _fallback_info(location.address)
 
 
-# ── 내부 함수 ─────────────────────────────────────────────────────────────────
+# ── PNU 추출 ───────────────────────────────────────────────────────────────────
 
-def _get_pnu(location: Location) -> str:
-    """VWorld → Juso → Kakao REST API 순으로 PNU 추출."""
-    # 1단계: VWorld (도로명 → 지번)
-    vworld_network_err = False
-    for addr_type in ("road", "parcel"):
-        params = {
-            "service": "address", "request": "getcoord", "version": "2.0",
-            "crs": "epsg:4326", "address": location.address,
-            "format": "json", "type": addr_type, "key": VWORLD_API_KEY,
-        }
-        try:
-            resp = requests.get(VWORLD_ADDRESS_URL, params=params, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-        except requests.RequestException:
-            vworld_network_err = True
-            break  # 네트워크·HTTP 오류 → 재시도 없이 폴백
+def _get_pnu(address: str) -> str:
+    """Juso API → Kakao REST API 순으로 19자리 PNU 반환.
 
-        if data.get("response", {}).get("status") != "OK":
-            continue
-
-        pnu = (
-            data.get("response", {})
-                .get("refined", {})
-                .get("structure", {})
-                .get("level4LC", "")
-        )
-        if len(pnu) == 19:
-            return pnu
-
-    # 2단계: Juso API
+    NOTE: VWorld getcoord 응답의 level4LC는 법정동코드(10자리)라
+    PNU(19자리)로 사용할 수 없으므로 제외.
+    """
+    # 1단계: Juso API (bdMgtSn 앞 19자리 = PNU)
     try:
-        return _pnu_via_juso(location.address)
+        return _pnu_via_juso(address)
     except BuildingAPIError:
         pass
 
-    # 3단계: Kakao REST API
-    return _pnu_via_kakao(location.address)
+    # 2단계: Kakao REST API (b_code + 산여부 + 본번 + 부번 조합)
+    return _pnu_via_kakao(address)
 
 
 def _pnu_via_juso(address: str) -> str:
-    """Juso API로 도로명 주소를 조회해 bdMgtSn 앞 19자리(PNU)를 반환한다.
+    """도로명주소 Juso API → bdMgtSn 앞 19자리(PNU).
+
     bdMgtSn 구조: 법정동코드(10) + 산여부(1) + 본번(4) + 부번(4) + 동코드(3) + 호코드(3)
     """
     if not JUSO_API_KEY:
-        raise BuildingAPIError(
-            "도로명 주소에서 PNU를 추출하려면 JUSO_API_KEY가 필요합니다. "
-            "www.juso.go.kr 에서 키를 발급받아 config.py에 입력하세요."
-        )
+        raise BuildingAPIError("JUSO_API_KEY 미설정")
 
-    params = {
-        "confmKey":     JUSO_API_KEY,
-        "currentPage":  1,
-        "countPerPage": 1,
-        "keyword":      address,
-        "resultType":   "json",
-    }
     try:
-        resp = requests.get(JUSO_API_URL, params=params, timeout=10)
+        resp = requests.get(
+            JUSO_API_URL,
+            params={
+                "confmKey": JUSO_API_KEY, "currentPage": 1,
+                "countPerPage": 1, "keyword": address, "resultType": "json",
+            },
+            timeout=10,
+        )
         resp.raise_for_status()
         data = resp.json()
     except requests.RequestException as e:
@@ -123,23 +106,20 @@ def _pnu_via_juso(address: str) -> str:
 
     juso_list = data.get("results", {}).get("juso", [])
     if not juso_list:
-        raise BuildingAPIError(f"Juso API에서 주소를 찾을 수 없습니다: '{address}'")
+        raise BuildingAPIError(f"Juso API 결과 없음: '{address}'")
 
     bd_mgt_sn = juso_list[0].get("bdMgtSn", "")
     pnu = bd_mgt_sn[:19]
     if len(pnu) != 19:
-        raise BuildingAPIError(f"Juso API bdMgtSn에서 PNU를 추출할 수 없습니다: '{address}'")
+        raise BuildingAPIError(f"Juso bdMgtSn PNU 추출 실패: '{address}'")
     return pnu
 
 
 def _pnu_via_kakao(address: str) -> str:
-    """Kakao REST API 주소 검색으로 PNU를 구성한다.
-
-    PNU = b_code(10) + 산여부(1) + 본번(4) + 부번(4)
-    Kakao address 객체에서 b_code, mountain_yn, main/sub_address_no를 읽어 조합.
-    """
+    """Kakao REST API → b_code + 산여부 + 본번 + 부번 조합으로 19자리 PNU 생성."""
     if not KAKAO_REST_API_KEY:
-        raise BuildingAPIError("KAKAO_REST_API_KEY가 설정되지 않아 Kakao PNU 조회를 건너뜁니다.")
+        raise BuildingAPIError("KAKAO_REST_API_KEY 미설정")
+
     try:
         resp = requests.get(
             KAKAO_ADDRESS_URL,
@@ -153,19 +133,19 @@ def _pnu_via_kakao(address: str) -> str:
         raise BuildingAPIError(f"Kakao 주소 조회 실패: {e}") from e
 
     if not docs:
-        raise BuildingAPIError(f"Kakao 주소 검색 결과 없음: '{address}'")
+        raise BuildingAPIError(f"Kakao 결과 없음: '{address}'")
 
-    addr = docs[0].get("address")  # 지번주소 정보
+    addr = docs[0].get("address")
     if not addr:
-        raise BuildingAPIError(f"Kakao 응답에 지번주소 정보 없음: '{address}'")
+        raise BuildingAPIError(f"Kakao 지번주소 정보 없음: '{address}'")
 
     b_code = addr.get("b_code", "")
     if len(b_code) < 10:
         raise BuildingAPIError(f"Kakao b_code 형식 오류: '{b_code}'")
 
-    mountain  = "1" if addr.get("mountain_yn", "N") == "Y" else "0"
-    main_no   = (addr.get("main_address_no") or "0").zfill(4)
-    sub_no    = (addr.get("sub_address_no")  or "0").zfill(4)
+    mountain = "1" if addr.get("mountain_yn", "N") == "Y" else "0"
+    main_no  = (addr.get("main_address_no") or "0").zfill(4)
+    sub_no   = (addr.get("sub_address_no")  or "0").zfill(4)
 
     pnu = b_code[:10] + mountain + main_no + sub_no
     if len(pnu) != 19:
@@ -173,37 +153,42 @@ def _pnu_via_kakao(address: str) -> str:
     return pnu
 
 
+# ── 건축물대장 API ─────────────────────────────────────────────────────────────
+
 def _fetch_building_item(pnu: str) -> dict:
-    """PNU → 건축HUB getBrTitleInfo 조회"""
+    """PNU → 건축HUB getBrTitleInfo 표제부 조회."""
+    if not BUILDING_API_KEY:
+        raise BuildingAPIError("BUILDING_API_KEY 미설정")
+
     params = {
         "serviceKey": BUILDING_API_KEY,
+        "platGbCd":   pnu[10],      # 산여부: 0=대지, 1=산 (PNU 11번째 자리)
         "sigunguCd":  pnu[0:5],
         "bjdongCd":   pnu[5:10],
-        "bun":        pnu[11:15],
-        "ji":         pnu[15:19],
+        "bun":        pnu[11:15],   # 본번 (산여부 다음 4자리)
+        "ji":         pnu[15:19],   # 부번
         "_type":      "json",
+        "numOfRows":  1,
     }
     return _call_building_api(params)
 
 
 def _call_building_api(params: dict) -> dict:
-    """건축물대장 API 호출 공통 로직"""
     try:
-        resp = requests.get(BUILDING_REGISTRY_URL, params=params, timeout=10)
+        resp = requests.get(BUILDING_REGISTRY_URL, params=params, timeout=12)
         resp.raise_for_status()
     except requests.RequestException as e:
         raise BuildingAPIError(f"건축물대장 API 호출 실패: {e}") from e
 
     if not resp.content:
-        raise BuildingAPIError(
-            "건축물대장 API 응답이 비어 있습니다. "
-            "data.go.kr에서 발급한 유효한 인코딩 키인지 확인하세요."
-        )
+        raise BuildingAPIError("건축물대장 API 응답 비어 있음 — 인코딩 키 여부 확인")
 
     try:
         data = resp.json()
-    except Exception as e:
-        raise BuildingAPIError(f"건축물대장 API 응답 파싱 실패: {resp.text[:200]}") from e
+    except Exception:
+        # XML 오류 응답 (OpenAPI 공통 오류 메시지)
+        text = resp.text[:300]
+        raise BuildingAPIError(f"건축물대장 API JSON 파싱 실패: {text}")
 
     items = (
         data.get("response", {})
@@ -212,7 +197,10 @@ def _call_building_api(params: dict) -> dict:
             .get("item", [])
     )
     if not items:
-        raise BuildingAPIError("건축물대장에서 건물 정보를 찾을 수 없습니다.")
+        result_code = data.get("response", {}).get("header", {}).get("resultCode", "")
+        raise BuildingAPIError(
+            f"건축물대장 데이터 없음 (resultCode={result_code})"
+        )
     return items if isinstance(items, dict) else items[0]
 
 
@@ -221,13 +209,13 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     building_type = _PURPOSE_TO_TYPE.get(purpose, "기타")
     floors        = int(item.get("grndFlrCnt") or 1)
     roof_area     = float(item.get("archArea") or 0.0)
-    # archArea가 0일 때 totArea / floors로 추정 (연면적 ÷ 층수 = 층당 면적 ≈ 지붕면적)
+
     if roof_area == 0.0:
         tot_area = float(item.get("totArea") or 0.0)
         if tot_area > 0:
             roof_area = round(tot_area / max(floors, 1), 1)
-    roof_cd       = item.get("roofCdNm", "")
 
+    roof_cd = item.get("roofCdNm", "")
     if "경사" in roof_cd:
         roof_type, slope = "경사지붕", 30.0
     else:
@@ -251,44 +239,96 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     )
 
 
-def _fallback_info(address: str) -> BuildingInfo:
-    """건축물대장 API 미응답 시 기본값 (테스트·시연용)"""
+# ── OSM Overpass 면적 추정 ─────────────────────────────────────────────────────
+
+def _building_area_from_osm(lat: float, lng: float, radius_m: int = 30) -> float | None:
+    """OSM Overpass API로 좌표 주변 건물 폴리곤 면적(㎡) 추출.
+
+    무료, API키 불필요, 해외 서버(Railway)에서도 접근 가능.
+    """
+    query = (
+        f"[out:json][timeout:12];"
+        f"way[\"building\"](around:{radius_m},{lat},{lng});"
+        f"out geom;"
+    )
+    try:
+        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=15)
+        resp.raise_for_status()
+        elements = resp.json().get("elements", [])
+    except Exception:
+        return None
+
+    if not elements:
+        return None
+
+    # 노드 수가 가장 많은 요소(가장 상세한 건물 폴리곤) 선택
+    el = max(elements, key=lambda e: len(e.get("geometry", [])))
+    coords = [(p["lon"], p["lat"]) for p in el.get("geometry", [])]
+    if len(coords) < 3:
+        return None
+
+    area = _polygon_area_m2(coords)
+    return round(area, 1) if area > 5 else None  # 5㎡ 미만은 노이즈
+
+
+def _polygon_area_m2(coords: list[tuple[float, float]]) -> float:
+    """위경도 다각형 → 면적(㎡) 변환 (소면적 근사, 쇼레이스 공식).
+
+    위도 1도 ≈ 111,320m, 경도 1도 ≈ 111,320 * cos(lat) m.
+    """
+    if len(coords) < 3:
+        return 0.0
+    lat0 = sum(c[1] for c in coords) / len(coords)
+    mx   = 111_320 * math.cos(math.radians(lat0))
+    my   = 111_320
+
+    area = 0.0
+    n    = len(coords)
+    for i in range(n):
+        x1, y1 = coords[i][0] * mx,       coords[i][1] * my
+        x2, y2 = coords[(i + 1) % n][0] * mx, coords[(i + 1) % n][1] * my
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0
+
+
+# ── 폴백 ──────────────────────────────────────────────────────────────────────
+
+def _fallback_info(
+    address: str,
+    roof_area: float = 100.0,
+    area_source: str = "기본값",
+) -> BuildingInfo:
     return BuildingInfo(
         address=address,
         building_type="기타",
         floors=1,
-        roof_area_m2=100.0,
+        roof_area_m2=roof_area,
         roof_type="평지붕",
         roof_slope_deg=0.0,
         roof_azimuth_deg=180.0,
         structure="철근콘크리트구조",
-        extra={"fallback": True},
+        extra={"fallback": True, "area_source": area_source},
     )
 
+
+# ── 단독 실행 (로컬 테스트용) ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import json as _json
     from dataclasses import asdict
+    from data_collector.address_api import AddressAPI
 
-    params = {
-        "serviceKey": BUILDING_API_KEY,
-        "sigunguCd":  "11680",
-        "bjdongCd":   "10500",
-        "bun":        "0169",
-        "ji":         "0000",
-        "_type":      "json",
-    }
-    print("요청 URL:", BUILDING_REGISTRY_URL)
-    print("파라미터:", params)
+    test_addr = "서울특별시 강남구 삼성동 169"
+    print(f"[테스트 주소] {test_addr}\n")
 
     try:
-        item = _call_building_api(params)
-        print("\n[원본 응답]")
-        print(_json.dumps(item, ensure_ascii=False, indent=2))
-
-        address = item.get("platPlc", "주소 미상")
-        info = _parse_item(address, item)
-        print("\n[BuildingInfo 변환 결과]")
-        print(_json.dumps(asdict(info), ensure_ascii=False, indent=2))
+        pnu = _get_pnu(test_addr)
+        print(f"PNU: {pnu}")
+        item = _fetch_building_item(pnu)
+        print("건축물대장 원본:", _json.dumps(item, ensure_ascii=False, indent=2))
     except BuildingAPIError as e:
-        print(f"\n[오류] {e}")
+        print(f"건축물대장 실패: {e}")
+
+    loc = AddressAPI().get_coordinates(test_addr)
+    area = _building_area_from_osm(loc.lat, loc.lng)
+    print(f"\nOSM 면적: {area} ㎡")
