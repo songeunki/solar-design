@@ -4,9 +4,7 @@ import ProgressBar from './ProgressBar';
 import ResultCards from './ResultCards';
 import KakaoMap from './KakaoMap';
 
-const WS_BASE = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws')
-  : `ws://${location.host}`;
+const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
 export default function SingleAnalysis() {
   const [status, setStatus] = useState('idle'); // idle | loading | done | error

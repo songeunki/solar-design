@@ -5,9 +5,7 @@ import KakaoMap from './KakaoMap';
 import MonthlyChart from './MonthlyChart';
 import DownloadButtons from './DownloadButtons';
 
-const WS_BASE = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws')
-  : `ws://${location.host}`;
+const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
 export default function CompareAnalysis() {
   const [addresses, setAddresses] = useState(['', '']);
