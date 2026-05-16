@@ -88,21 +88,44 @@ export default function KakaoMap({
     map.panTo(new window.kakao.maps.LatLng(center.lat, center.lng));
   }, [center]);
 
-  // ── 건물 윤곽 폴리곤 ─────────────────────────────────────────────────────
+  // ── 건물 윤곽 폴리곤 (패널과 동일한 azimuth 회전 적용) ─────────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
     const { kakao } = window;
     if (polygonRef.current) { polygonRef.current.setMap(null); polygonRef.current = null; }
     if (!buildingPolygon || buildingPolygon.length < 3) return;
+
+    // 건물 중심: panelLayout이 있으면 사용, 없으면 폴리곤 평균값
+    const cLat = panelLayout?.center_lat
+      ?? buildingPolygon.reduce((s, p) => s + p.lat, 0) / buildingPolygon.length;
+    const cLng = panelLayout?.center_lng
+      ?? buildingPolygon.reduce((s, p) => s + p.lng, 0) / buildingPolygon.length;
+
+    const azDeg  = panelLayout?.stats?.azimuth_deg ?? 180;
+    const rotRad = -((azDeg - 180) * Math.PI / 180);
+    const cosR   = Math.cos(rotRad);
+    const sinR   = Math.sin(rotRad);
+    const mLat   = 111320;
+    const mLng   = mLat * Math.cos(cLat * Math.PI / 180);
+
+    const rotPtB = (lat, lng) => {
+      const dx = (lng - cLng) * mLng;
+      const dy = (lat - cLat) * mLat;
+      return new kakao.maps.LatLng(
+        cLat + (dx * sinR + dy * cosR) / mLat,
+        cLng + (dx * cosR - dy * sinR) / mLng,
+      );
+    };
+
     const poly = new kakao.maps.Polygon({
-      path: buildingPolygon.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+      path: buildingPolygon.map(p => rotPtB(p.lat, p.lng)),
       strokeWeight: 2, strokeColor: '#FF6B35', strokeOpacity: 0.9,
       fillColor: '#FF6B35', fillOpacity: 0.12,
     });
     poly.setMap(map);
     polygonRef.current = poly;
-  }, [buildingPolygon]);
+  }, [buildingPolygon, panelLayout]);
 
   // ── 패널 Polygon 렌더링 ──────────────────────────────────────────────────
   useEffect(() => {

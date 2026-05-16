@@ -92,10 +92,11 @@ class PanelLayoutEngine:
 
         # ── 1. 지붕 크기 추정 (건축면적 우선, 없으면 가용면적) ───────────
         footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
-        # 일반 건물 장변(동서):단변(남북) ≈ 1.5:1
+        # 남향 건물: 장변(남북)이 깊이 방향, 단변(동서)이 폭 방향
+        # 박공지붕 용마루는 동서(EW) 방향, 경사면은 남북(NS) 방향
         _ASPECT       = 1.5
-        building_ew_m = math.sqrt(footprint * _ASPECT)   # 동서 장변
-        building_ns_m = math.sqrt(footprint / _ASPECT)   # 남북 단변
+        building_ew_m = math.sqrt(footprint / _ASPECT)   # 동서 단변 (폭)
+        building_ns_m = math.sqrt(footprint * _ASPECT)   # 남북 장변 (깊이)
 
         # ── 2. 외곽 경계 여유 (1 m) ──────────────────────────────────────
         MARGIN = 1.0
@@ -133,9 +134,10 @@ class PanelLayoutEngine:
         origin_lng = lng - (col_count * col_spacing_deg / 2)
 
         # ── 9. 패널 목록 생성 ─────────────────────────────────────────────
-        # 박공지붕: row_count // 2 기준으로 남/북 경사면 분리
-        # rows 0..r_split-1 → 남사면, rows r_split..row_count-1 → 북사면
-        r_split = row_count // 2 if roof_shape == "gable" else None
+        # 박공지붕: 격자 중심(= 건물 center_lat) 기준으로 남/북 경사면 분리
+        # p_lat = origin_lat + r*spacing, center_lat ≈ origin_lat + row_count/2*spacing
+        # r >= ceil(row_count/2) → p_lat >= center_lat → 북사면
+        r_split = (row_count + 1) // 2 if roof_shape == "gable" else None
 
         panels: list[Panel] = []
         for r in range(row_count):

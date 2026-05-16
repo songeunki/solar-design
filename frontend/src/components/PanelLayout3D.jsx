@@ -67,9 +67,9 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
   const bFloors     = building.floor    || 3;
   const bAreaM2     = building.area     || 200;
   const archAreaM2  = building.archArea || bAreaM2;
-  // 건물 footprint: stats에 EW/NS 있으면 사용, 없으면 1.5:1 비율 추정
-  const DX = stats.building_ew_m || Math.sqrt(archAreaM2 * 1.5);  // 동서 장변 (m)
-  const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 / 1.5);  // 남북 단변 (m)
+  // 건물 footprint: stats 우선, 없으면 남북 장변(1.5x)/동서 단변(1/1.5x) 비율 추정
+  const DX = stats.building_ew_m || Math.sqrt(archAreaM2 / 1.5);  // 동서 단변 (m, 폭)
+  const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 * 1.5);  // 남북 장변 (m, 깊이)
   const Dmax = Math.max(DX, DZ);
   const bH  = bFloors * 3.0;
   // rise: 박공/팔작 지붕의 남사면 고저차
