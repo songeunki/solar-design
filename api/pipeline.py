@@ -74,6 +74,10 @@ def run_pipeline(
     effective_azimuth = azimuth_override if azimuth_override is not None else roof.azimuth_deg
     azimuth_source    = "override" if azimuth_override is not None else "osm"
 
+    # OSM 실측 건물 치수 (없으면 None → panel_layout이 추정)
+    osm_ew_m = building.extra.get("building_ew_m")
+    osm_ns_m = building.extra.get("building_ns_m")
+
     roof_polygon = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
@@ -87,6 +91,8 @@ def run_pipeline(
         arch_area_m2=arch_area_m2,
         roof_shape=roof_shape,
         target_panel_count=electrical.panel_count,
+        osm_building_ew_m=osm_ew_m,
+        osm_building_ns_m=osm_ns_m,
     )
 
     report = ReportGenerator().generate(

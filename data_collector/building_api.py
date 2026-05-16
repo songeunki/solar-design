@@ -41,21 +41,30 @@ class BuildingAPI:
     """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
     def get_building_info(self, location: Location) -> BuildingInfo:
-        # OSM으로 건물 형상 사전 획득 (면적 + 방위각)
-        osm_area, osm_azimuth = _building_info_from_osm(location.lat, location.lng)
+        # OSM으로 건물 형상 사전 획득 (면적 + 방위각 + EW/NS 치수)
+        osm_area, osm_azimuth, osm_ew_m, osm_ns_m = _building_info_from_osm(
+            location.lat, location.lng
+        )
         warnings.warn(
-            f"[BuildingAPI] OSM 방위각 계산: {osm_azimuth}° ({location.address})",
+            f"[BuildingAPI] OSM 결과: azimuth={osm_azimuth}° "
+            f"EW={osm_ew_m}m NS={osm_ns_m}m ({location.address})",
             stacklevel=2,
         )
+
+        def _apply_osm(info: BuildingInfo) -> BuildingInfo:
+            info.roof_azimuth_deg        = osm_azimuth
+            info.extra["osm_azimuth_deg"]  = osm_azimuth
+            if osm_ew_m:
+                info.extra["building_ew_m"] = osm_ew_m
+            if osm_ns_m:
+                info.extra["building_ns_m"] = osm_ns_m
+            return info
 
         # 1단계: 건축물대장 API (Juso→Kakao로 PNU 확보)
         try:
             pnu  = _get_pnu(location.address)
             item = _fetch_building_item(pnu)
-            info = _parse_item(location.address, item)
-            info.roof_azimuth_deg = osm_azimuth
-            info.extra["osm_azimuth_deg"] = osm_azimuth
-            return info
+            return _apply_osm(_parse_item(location.address, item))
         except BuildingAPIError as e:
             warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
 
@@ -65,9 +74,7 @@ class BuildingAPI:
                 f"[BuildingAPI] OSM 면적 사용: {osm_area:.1f}㎡ ({location.address})",
                 stacklevel=2,
             )
-            info = _fallback_info(location.address, roof_area=osm_area, area_source="OSM")
-            info.roof_azimuth_deg = osm_azimuth
-            return info
+            return _apply_osm(_fallback_info(location.address, roof_area=osm_area, area_source="OSM"))
 
         return _fallback_info(location.address)
 
@@ -312,44 +319,141 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     )
 
 
-# ── OSM Overpass 면적·방위각 추정 ──────────────────────────────────────────────
+# ── OSM Overpass 면적·방위각·치수 추정 ────────────────────────────────────────
+
+_DEFAULT_AZIMUTH = 135.0   # OSM 데이터 완전 없을 때 기본값 (실측 기반)
+
+_CARDINAL_TO_DEG: dict[str, float] = {
+    "N": 0.0, "NNE": 22.5, "NE": 45.0, "ENE": 67.5,
+    "E": 90.0, "ESE": 112.5, "SE": 135.0, "SSE": 157.5,
+    "S": 180.0, "SSW": 202.5, "SW": 225.0, "WSW": 247.5,
+    "W": 270.0, "WNW": 292.5, "NW": 315.0, "NNW": 337.5,
+}
+
+
+def _parse_osm_direction(value: str) -> float | None:
+    """OSM building:direction / direction 태그 → 방위각(°). 파싱 실패 시 None."""
+    v = value.strip()
+    if v.upper() in _CARDINAL_TO_DEG:
+        return _CARDINAL_TO_DEG[v.upper()]
+    _LONG: dict[str, float] = {
+        "north": 0.0, "northeast": 45.0, "east": 90.0, "southeast": 135.0,
+        "south": 180.0, "southwest": 225.0, "west": 270.0, "northwest": 315.0,
+    }
+    if v.lower() in _LONG:
+        return _LONG[v.lower()]
+    try:
+        deg = float(v)
+        return deg if 0.0 <= deg <= 360.0 else None
+    except ValueError:
+        return None
+
+
+def _azimuth_from_road(lat: float, lng: float, radius_m: int = 30) -> float | None:
+    """인근 도로 방향에서 건물 방위각 추정. 실패 시 None.
+
+    도로 bearing에 +90°/-90° 법선 중 남향(180°)에 가까운 쪽 반환.
+    """
+    query = (
+        f"[out:json][timeout:10];"
+        f"way[\"highway\"](around:{radius_m},{lat},{lng});"
+        f"out geom;"
+    )
+    try:
+        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=12)
+        resp.raise_for_status()
+        elements = resp.json().get("elements", [])
+    except Exception:
+        return None
+
+    if not elements:
+        return None
+
+    el     = elements[0]
+    coords = [(p["lon"], p["lat"]) for p in el.get("geometry", [])]
+    if len(coords) < 2:
+        return None
+
+    lat0    = (coords[0][1] + coords[-1][1]) / 2
+    cos_lat = math.cos(math.radians(lat0))
+    dx = (coords[-1][0] - coords[0][0]) * 111_320 * cos_lat
+    dy = (coords[-1][1] - coords[0][1]) * 111_320
+    if math.hypot(dx, dy) < 0.1:
+        return None
+
+    road_bearing = math.degrees(math.atan2(dx, dy)) % 360
+    # 법선 두 후보 중 남향에 더 가까운 방향 선택
+    best, best_diff = road_bearing, 360.0
+    for offset in (90, -90):
+        candidate = (road_bearing + offset) % 360
+        diff = abs(candidate - 180)
+        if diff > 180:
+            diff = 360 - diff
+        if diff < best_diff:
+            best_diff, best = diff, candidate
+    return round(best, 1)
+
 
 def _building_info_from_osm(
     lat: float, lng: float, radius_m: int = 50
-) -> tuple[float | None, float]:
-    """OSM Overpass API로 건물 면적(㎡)과 방위각(°) 반환.
+) -> tuple[float | None, float, float | None, float | None]:
+    """OSM Overpass API로 건물 면적(㎡), 방위각(°), EW치수(m), NS치수(m) 반환.
 
-    반환: (area_m2 | None, azimuth_deg)  — 실패 시 (None, 180.0)
+    방위각 우선순위:
+      1) building:direction 태그 (가장 정확)
+      2) 폴리곤 엣지 법선 계산 (_azimuth_from_polygon)
+      3) 인근 도로 방향 (_azimuth_from_road)
+      4) 기본값 _DEFAULT_AZIMUTH
+    반환: (area_m2|None, azimuth_deg, ew_m|None, ns_m|None)
     """
+    # ── 건물 폴리곤 조회 (body = tags 포함) ──────────────────────────────
     query = (
         f"[out:json][timeout:12];"
         f"way[\"building\"](around:{radius_m},{lat},{lng});"
-        f"out geom;"
+        f"out body geom;"
     )
     try:
         resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=15)
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
     except Exception:
-        return None, 180.0
+        elements = []
 
-    if not elements:
-        return None, 180.0
+    if elements:
+        el     = max(elements, key=lambda e: len(e.get("geometry", [])))
+        coords = [(p["lon"], p["lat"]) for p in el.get("geometry", [])]
 
-    # 노드 수가 가장 많은 요소(가장 상세한 건물 폴리곤) 선택
-    el = max(elements, key=lambda e: len(e.get("geometry", [])))
-    coords = [(p["lon"], p["lat"]) for p in el.get("geometry", [])]
-    if len(coords) < 3:
-        return None, 180.0
+        if len(coords) >= 3:
+            # ── 면적 ─────────────────────────────────────────────────
+            area = _polygon_area_m2(coords)
 
-    area    = _polygon_area_m2(coords)
-    azimuth = _azimuth_from_polygon(coords)
-    return (round(area, 1) if area > 5 else None), azimuth
+            # ── 바운딩박스 EW/NS 치수 (세계 좌표 기준) ──────────────
+            lons  = [c[0] for c in coords]
+            lats_ = [c[1] for c in coords]
+            lat0  = sum(lats_) / len(lats_)
+            cos_l = math.cos(math.radians(lat0))
+            ew_m  = round((max(lons) - min(lons)) * 111_320 * cos_l, 1)
+            ns_m  = round((max(lats_) - min(lats_)) * 111_320, 1)
+
+            # ── 방위각: direction 태그 → 폴리곤 법선 ─────────────────
+            tags    = el.get("tags", {})
+            dir_tag = tags.get("building:direction") or tags.get("direction")
+            if dir_tag:
+                az = _parse_osm_direction(dir_tag)
+                azimuth = az if az is not None else _azimuth_from_polygon(coords)
+            else:
+                azimuth = _azimuth_from_polygon(coords)
+
+            return (round(area, 1) if area > 5 else None), azimuth, ew_m, ns_m
+
+    # ── 건물 폴리곤 없음 → 도로 방향 → 기본값 ────────────────────────
+    azimuth = _azimuth_from_road(lat, lng) or _DEFAULT_AZIMUTH
+    return None, azimuth, None, None
 
 
 def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float | None:
     """하위 호환용 — 면적만 반환."""
-    area, _ = _building_info_from_osm(lat, lng, radius_m)
+    area, _, _, _ = _building_info_from_osm(lat, lng, radius_m)
     return area
 
 

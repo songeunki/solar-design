@@ -102,16 +102,24 @@ class PanelLayoutEngine:
         arch_area_m2: float | None = None,
         roof_shape: str = "flat",
         target_panel_count: int | None = None,
+        osm_building_ew_m: float | None = None,
+        osm_building_ns_m: float | None = None,
     ) -> PanelLayoutResult:
 
         m_lng = M_PER_DEG_LAT * math.cos(math.radians(lat))
 
         # ── 1. 건물 footprint ─────────────────────────────────────────────
-        footprint     = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
-        _ASPECT       = 1.5
-        # 실제 건물 장축이 남북(NS) → NS 장변, EW 단변
-        building_ns_m = math.sqrt(footprint * _ASPECT)   # 남북 장변
-        building_ew_m = math.sqrt(footprint / _ASPECT)   # 동서 단변
+        footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
+        if osm_building_ew_m and osm_building_ew_m > 0 \
+                and osm_building_ns_m and osm_building_ns_m > 0:
+            # OSM 폴리곤 실측 치수 사용 (세계좌표 바운딩박스)
+            building_ew_m = osm_building_ew_m
+            building_ns_m = osm_building_ns_m
+        else:
+            # OSM 없음 — 종횡비 추정 (NS 장변 1.5:1 기본)
+            _ASPECT       = 1.5
+            building_ns_m = math.sqrt(footprint * _ASPECT)
+            building_ew_m = math.sqrt(footprint / _ASPECT)
 
         # ── 2. 외곽 경계 여유 (1 m) ──────────────────────────────────────
         MARGIN   = 1.0

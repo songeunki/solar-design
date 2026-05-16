@@ -133,14 +133,16 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
     else:
         result["steps"]["building_api"] = {"status": "skip", "reason": "PNU 확보 실패"}
 
-    # Step 5: OSM Overpass (면적 + 방위각)
+    # Step 5: OSM Overpass (면적 + 방위각 + EW/NS 치수)
     if loc:
         try:
-            area, azimuth = _building_info_from_osm(loc.lat, loc.lng)
+            area, azimuth, ew_m, ns_m = _building_info_from_osm(loc.lat, loc.lng)
             result["steps"]["osm"] = {
-                "status":      "ok" if area else "no_data",
-                "area_m2":     area,
-                "azimuth_deg": azimuth,
+                "status":        "ok" if area else "no_data",
+                "area_m2":       area,
+                "azimuth_deg":   azimuth,
+                "building_ew_m": ew_m,
+                "building_ns_m": ns_m,
             }
         except Exception as e:
             result["steps"]["osm"] = {"status": "error", "error": str(e)}
