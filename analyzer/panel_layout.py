@@ -225,13 +225,27 @@ class PanelLayoutEngine:
         print(f"[PL] center: {lat:.6f}, {lng:.6f}", flush=True)
         print(f"[PL] building_ew_m(동서): {building_ew_m:.2f}, building_ns_m(남북): {building_ns_m:.2f}", flush=True)
         print(f"[PL] azimuth_deg: {azimuth_deg}, rot_rad: {rot_rad:.4f}", flush=True)
-        if panels:
-            print("[PL] 첫번째 패널 corners:", flush=True)
-            for name, pt in zip(['SW', 'SE', 'NE', 'NW'], panels[0].corners):
-                print(f"  {name}: lat={pt['lat']:.6f}, lng={pt['lng']:.6f}", flush=True)
+        if panels and panels[0].corners and len(panels[0].corners) == 4:
+            p0c = panels[0].corners
+            sw, se, ne, nw = p0c[0], p0c[1], p0c[2], p0c[3]
+            print("[PL] 첫번째 패널 4꼭짓점 (SW→SE=동쪽lng증가, SE→NE=북쪽lat증가 가 정상):", flush=True)
+            print(f"  SW: lat={sw['lat']:.7f}, lng={sw['lng']:.7f}", flush=True)
+            print(f"  SE: lat={se['lat']:.7f}, lng={se['lng']:.7f}", flush=True)
+            print(f"  NE: lat={ne['lat']:.7f}, lng={ne['lng']:.7f}", flush=True)
+            print(f"  NW: lat={nw['lat']:.7f}, lng={nw['lng']:.7f}", flush=True)
+            # EW폭 = SW→SE 경도차, NS높이 = SE→NE 위도차
+            ew_m = (se['lng'] - sw['lng']) * m_lng
+            ns_m = (ne['lat'] - se['lat']) * M_PER_DEG_LAT
+            orient = "landscape(EW장변)✓" if ew_m > ns_m else "portrait(NS장변)⚠️"
+            print(f"[PL] 단일패널 EW={ew_m:.3f}m(SW→SE경도차) NS={ns_m:.3f}m(SE→NE위도차) → {orient}", flush=True)
+            print(f"[PL] 참고: SE.lng==NE.lng({se['lng']:.7f}=={ne['lng']:.7f}) 는 정상 — 둘 다 동쪽변", flush=True)
         if len(panels) > 1 and panels[1].corners:
+            sw0 = panels[0].corners[0]
             sw1 = panels[1].corners[0]
-            print(f"[PL] 두번째 패널 SW: lat={sw1['lat']:.6f}, lng={sw1['lng']:.6f}", flush=True)
+            delta_ew = (sw1['lng'] - sw0['lng']) * m_lng
+            delta_ns = (sw1['lat'] - sw0['lat']) * M_PER_DEG_LAT
+            print(f"[PL] panels[0]→panels[1] SW 델타: δEW={delta_ew:.3f}m δNS={delta_ns:.3f}m", flush=True)
+            print(f"  (col_spacing={col_spacing_m:.3f}m 이면 δEW≈{col_spacing_m:.3f} 가 정상)", flush=True)
 
         # ── [DEBUG] 방향 검증 ─────────────────────────────────────────────
         visible = [p for p in panels if p.status != "buffer"]
@@ -244,13 +258,13 @@ class PanelLayoutEngine:
                 f"[PanelLayout] 배열범위 δEW={dlng_m:.1f}m δNS={dlat_m:.1f}m → {grid_orient}",
                 flush=True,
             )
-            if p0.corners:
-                sw, se, nw = p0.corners[0], p0.corners[1], p0.corners[3]
-                p_ew = abs(se["lng"] - sw["lng"]) * m_lng
-                p_ns = abs(nw["lat"] - sw["lat"]) * M_PER_DEG_LAT
+            if p0.corners and len(p0.corners) == 4:
+                _sw, _se, _ne = p0.corners[0], p0.corners[1], p0.corners[2]
+                _ew = (_se["lng"] - _sw["lng"]) * m_lng   # SW→SE 경도차 = EW폭
+                _ns = (_ne["lat"] - _se["lat"]) * M_PER_DEG_LAT  # SE→NE 위도차 = NS높이
                 print(
-                    f"[PanelLayout] 단일패널 EW={p_ew:.3f}m NS={p_ns:.3f}m "
-                    f"→ {'가로(landscape)✓' if p_ew > p_ns else '세로(portrait)⚠️'}",
+                    f"[PanelLayout] 단일패널 EW={_ew:.3f}m(SW→SE) NS={_ns:.3f}m(SE→NE) "
+                    f"→ {'가로(landscape)✓' if _ew > _ns else '세로(portrait)⚠️'}",
                     flush=True,
                 )
 
