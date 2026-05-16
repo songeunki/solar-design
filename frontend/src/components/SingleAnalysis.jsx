@@ -19,7 +19,7 @@ export default function SingleAnalysis() {
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const startAnalysis = useCallback(({ address }) => {
+  const startAnalysis = useCallback(({ address, azimuth_override = null }) => {
     if (statusRef.current === 'loading') return;
 
     // 이전 WebSocket 정리
@@ -48,7 +48,7 @@ export default function SingleAnalysis() {
     const ws = new WebSocket(`${WS_BASE}/ws/analyze`);
     wsRef.current = ws;
 
-    ws.onopen = () => ws.send(JSON.stringify({ address }));
+    ws.onopen = () => ws.send(JSON.stringify({ address, azimuth_override }));
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);

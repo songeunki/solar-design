@@ -41,22 +41,33 @@ class BuildingAPI:
     """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
     def get_building_info(self, location: Location) -> BuildingInfo:
+        # OSM으로 건물 형상 사전 획득 (면적 + 방위각)
+        osm_area, osm_azimuth = _building_info_from_osm(location.lat, location.lng)
+        warnings.warn(
+            f"[BuildingAPI] OSM 방위각 계산: {osm_azimuth}° ({location.address})",
+            stacklevel=2,
+        )
+
         # 1단계: 건축물대장 API (Juso→Kakao로 PNU 확보)
         try:
             pnu  = _get_pnu(location.address)
             item = _fetch_building_item(pnu)
-            return _parse_item(location.address, item)
+            info = _parse_item(location.address, item)
+            info.roof_azimuth_deg = osm_azimuth
+            info.extra["osm_azimuth_deg"] = osm_azimuth
+            return info
         except BuildingAPIError as e:
             warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
 
-        # 2단계: OSM Overpass로 건물 면적만 추정
-        area = _building_area_from_osm(location.lat, location.lng)
-        if area:
+        # 2단계: OSM 면적 폴백
+        if osm_area:
             warnings.warn(
-                f"[BuildingAPI] OSM 면적 사용: {area:.1f}㎡ ({location.address})",
+                f"[BuildingAPI] OSM 면적 사용: {osm_area:.1f}㎡ ({location.address})",
                 stacklevel=2,
             )
-            return _fallback_info(location.address, roof_area=area, area_source="OSM")
+            info = _fallback_info(location.address, roof_area=osm_area, area_source="OSM")
+            info.roof_azimuth_deg = osm_azimuth
+            return info
 
         return _fallback_info(location.address)
 
@@ -301,12 +312,14 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     )
 
 
-# ── OSM Overpass 면적 추정 ─────────────────────────────────────────────────────
+# ── OSM Overpass 면적·방위각 추정 ──────────────────────────────────────────────
 
-def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float | None:
-    """OSM Overpass API로 좌표 주변 건물 폴리곤 면적(㎡) 추출.
+def _building_info_from_osm(
+    lat: float, lng: float, radius_m: int = 50
+) -> tuple[float | None, float]:
+    """OSM Overpass API로 건물 면적(㎡)과 방위각(°) 반환.
 
-    무료, API키 불필요, 해외 서버(Railway)에서도 접근 가능.
+    반환: (area_m2 | None, azimuth_deg)  — 실패 시 (None, 180.0)
     """
     query = (
         f"[out:json][timeout:12];"
@@ -318,19 +331,64 @@ def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
     except Exception:
-        return None
+        return None, 180.0
 
     if not elements:
-        return None
+        return None, 180.0
 
     # 노드 수가 가장 많은 요소(가장 상세한 건물 폴리곤) 선택
     el = max(elements, key=lambda e: len(e.get("geometry", [])))
     coords = [(p["lon"], p["lat"]) for p in el.get("geometry", [])]
     if len(coords) < 3:
-        return None
+        return None, 180.0
 
-    area = _polygon_area_m2(coords)
-    return round(area, 1) if area > 5 else None  # 5㎡ 미만은 노이즈
+    area    = _polygon_area_m2(coords)
+    azimuth = _azimuth_from_polygon(coords)
+    return (round(area, 1) if area > 5 else None), azimuth
+
+
+def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float | None:
+    """하위 호환용 — 면적만 반환."""
+    area, _ = _building_info_from_osm(lat, lng, radius_m)
+    return area
+
+
+def _azimuth_from_polygon(coords: list[tuple[float, float]]) -> float:
+    """건물 폴리곤 엣지에서 태양광 방위각(°) 계산.
+
+    남쪽(180°)에 가장 가까운 면의 법선 방향 반환.
+    엣지 길이 가중치 적용: 긴 벽면이 방위각 결정에 더 큰 영향.
+    coords: [(lon, lat), ...] — OSM geometry 형식 (닫힌 폴리곤)
+    """
+    if len(coords) < 3:
+        return 180.0
+    lat0    = sum(c[1] for c in coords) / len(coords)
+    cos_lat = math.cos(math.radians(lat0))
+    best_az    = 180.0
+    best_score = -1.0
+    n = len(coords)
+    for i in range(n - 1):
+        lon1, lat1 = coords[i]
+        lon2, lat2 = coords[(i + 1) % n]
+        dx = (lon2 - lon1) * 111_320 * cos_lat   # 동서 성분 (m)
+        dy = (lat2 - lat1) * 111_320              # 남북 성분 (m)
+        length = math.hypot(dx, dy)
+        if length < 0.5:
+            continue
+        # 엣지 방위각 (북=0°, 동=90°, 남=180°, 서=270°)
+        edge_bearing = math.degrees(math.atan2(dx, dy)) % 360
+        # 좌우 법선 각도 두 후보 — 폴리곤 winding 방향 무관하게 둘 다 검사
+        for offset in (90, -90):
+            normal_az = (edge_bearing + offset) % 360
+            diff = abs(normal_az - 180)
+            if diff > 180:
+                diff = 360 - diff
+            # 남향에 가깝고(diff↓) 엣지가 길수록(length↑) 높은 점수
+            score = length / (1.0 + diff)
+            if score > best_score:
+                best_score = score
+                best_az    = normal_az
+    return round(best_az, 1)
 
 
 def _polygon_area_m2(coords: list[tuple[float, float]]) -> float:

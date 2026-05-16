@@ -14,6 +14,7 @@ router = APIRouter(tags=["analyze"])
 
 class AnalyzeRequest(BaseModel):
     address: str
+    azimuth_override: float | None = None
 
 
 # ── REST ─────────────────────────────────────────────────────────────────────
@@ -37,7 +38,9 @@ async def satellite_map(lat: float, lng: float, level: int = 2):
 async def post_analyze(req: AnalyzeRequest):
     loop = asyncio.get_running_loop()
     try:
-        return await loop.run_in_executor(None, run_pipeline, req.address)
+        return await loop.run_in_executor(
+            None, run_pipeline, req.address, None, req.azimuth_override
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -50,7 +53,7 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
     from config import BUILDING_API_KEY, KAKAO_REST_API_KEY, JUSO_API_KEY, VWORLD_API_KEY
     from data_collector.building_api import (
         _pnu_via_juso, _pnu_via_kakao, _fetch_building_item,
-        _building_area_from_osm, BuildingAPIError,
+        _building_info_from_osm, BuildingAPIError,
     )
     from data_collector.address_api import AddressAPI, AddressAPIError
 
@@ -130,13 +133,14 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
     else:
         result["steps"]["building_api"] = {"status": "skip", "reason": "PNU 확보 실패"}
 
-    # Step 5: OSM Overpass
+    # Step 5: OSM Overpass (면적 + 방위각)
     if loc:
         try:
-            area = _building_area_from_osm(loc.lat, loc.lng)
+            area, azimuth = _building_info_from_osm(loc.lat, loc.lng)
             result["steps"]["osm"] = {
-                "status": "ok" if area else "no_data",
-                "area_m2": area,
+                "status":      "ok" if area else "no_data",
+                "area_m2":     area,
+                "azimuth_deg": azimuth,
             }
         except Exception as e:
             result["steps"]["osm"] = {"status": "error", "error": str(e)}
@@ -167,6 +171,16 @@ async def ws_analyze(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "address 필드가 비어 있습니다."})
             await websocket.close()
             return
+        # 사용자 방위각 override (0~360 범위 검증)
+        azimuth_override: float | None = None
+        raw_az = data.get("azimuth_override")
+        if raw_az is not None:
+            try:
+                v = float(raw_az)
+                if 0 <= v <= 360:
+                    azimuth_override = v
+            except (TypeError, ValueError):
+                pass
     except WebSocketDisconnect:
         return
 
@@ -181,7 +195,7 @@ async def ws_analyze(websocket: WebSocket):
 
     def run() -> None:
         try:
-            result = run_pipeline(address, on_progress)
+            result = run_pipeline(address, on_progress, azimuth_override=azimuth_override)
             asyncio.run_coroutine_threadsafe(
                 queue.put({"type": "result", "data": result}),
                 loop,

@@ -24,8 +24,15 @@ def _to_url(path: str | None) -> str | None:
     return f"/files/{pathlib.Path(path).name}"
 
 
-def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
-    """단일 주소 전체 파이프라인 실행. 동기 함수 (ThreadPoolExecutor로 호출)."""
+def run_pipeline(
+    address: str,
+    on_progress: ProgressCb | None = None,
+    azimuth_override: float | None = None,
+) -> dict:
+    """단일 주소 전체 파이프라인 실행. 동기 함수 (ThreadPoolExecutor로 호출).
+
+    azimuth_override: 사용자 직접 입력 방위각(°). None이면 OSM 자동 계산값 사용.
+    """
     from data_collector.address_api import AddressAPI
     from data_collector.building_api import BuildingAPI
     from data_collector.weather_api import WeatherAPI
@@ -63,6 +70,10 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     roof_shape   = building.extra.get("roof_shape", "flat")
     arch_area_m2 = building.extra.get("arch_area_m2") or building.roof_area_m2
 
+    # azimuth: 사용자 override > OSM 자동 계산
+    effective_azimuth = azimuth_override if azimuth_override is not None else roof.azimuth_deg
+    azimuth_source    = "override" if azimuth_override is not None else "osm"
+
     roof_polygon = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
@@ -72,7 +83,7 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         sun_elevation_winter_deg=roof.solar_elevations.get("동지", 29.4),
         annual_generation_kwh=electrical.annual_generation_kwh,
         roof_polygon=roof_polygon,
-        azimuth_deg=roof.azimuth_deg,
+        azimuth_deg=effective_azimuth,
         arch_area_m2=arch_area_m2,
         roof_shape=roof_shape,
         target_panel_count=electrical.panel_count,
@@ -105,12 +116,14 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         "lng":       location.lng,
         # ResultCards용 구조화 필드
         "building": {
-            "address":   address,
-            "floor":     building.floors,
-            "area":      building.extra.get("total_floor_area_m2") or building.roof_area_m2,
-            "archArea":  arch_area_m2,
-            "roofType":  building.roof_type,
-            "roofShape": roof_shape,
+            "address":       address,
+            "floor":         building.floors,
+            "area":          building.extra.get("total_floor_area_m2") or building.roof_area_m2,
+            "archArea":      arch_area_m2,
+            "roofType":      building.roof_type,
+            "roofShape":     roof_shape,
+            "azimuth":       effective_azimuth,
+            "azimuthSource": azimuth_source,
         },
         "system": {
             "panelCount":  electrical.panel_count,
