@@ -1,5 +1,6 @@
 import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
+import PanelLayoutViewer from './PanelLayoutViewer';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
 
@@ -16,6 +17,7 @@ export default function ResultCards({ result }) {
     system = {},
     financial = {},
     monthly_data = [],
+    panel_layout = null,
     report_url,
     pdf_url,
   } = result;
@@ -121,6 +123,20 @@ export default function ResultCards({ result }) {
         {/* 사이드: 건물 + 시스템 정보 */}
         <BuildingInfo building={building} system={system} />
       </div>
+
+      {/* 패널 배치도 */}
+      {panel_layout && (
+        <div className="card card-accent" style={{ marginTop: 16 }}>
+          <div className="section-header">
+            <div className="section-title-dot" />
+            <span className="section-title">🔲 태양광 패널 가상 배치도</span>
+            <div className="badge badge-blue" style={{ marginLeft: 'auto' }}>
+              640W × {panel_layout.stats?.active_panels ?? '-'}매
+            </div>
+          </div>
+          <PanelLayoutViewer layout={panel_layout} />
+        </div>
+      )}
 
       {/* 다운로드 */}
       <div className="card" style={{ marginTop: 16 }}>

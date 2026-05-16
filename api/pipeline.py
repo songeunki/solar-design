@@ -55,11 +55,28 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     p(5, "보고서 생성")
     solar_altitude_deg = _calc_solar_altitude(location.lat)
 
+    # 패널 배치 계산 (위성 윤곽 검출 시도 → 실패 시 직사각형 근사)
+    from analyzer.panel_layout import PanelLayoutEngine
+    from analyzer.roof_capture import detect_building_polygon
+    from config import KAKAO_JS_APP_KEY
+
+    roof_polygon = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
+    panel_layout = PanelLayoutEngine().compute(
+        lat=location.lat,
+        lng=location.lng,
+        usable_area_m2=roof.usable_area_m2,
+        tilt_deg=roof.tilt_deg,
+        sun_elevation_winter_deg=roof.solar_elevations.get("동지", 29.4),
+        annual_generation_kwh=electrical.annual_generation_kwh,
+        roof_polygon=roof_polygon,
+    )
+
     report = ReportGenerator().generate(
         address, building, roof, electrical, structural,
         lat=location.lat, lng=location.lng,
         monthly_irradiance=weather.monthly_irradiance,
         solar_altitude_deg=solar_altitude_deg,
+        panel_layout=panel_layout.to_dict(),
     )
 
     # 경제성 (report_generator와 동일한 계산값 재사용)
@@ -108,8 +125,9 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
             }
             for i in range(12)
         ],
-        "report_url": html_url,
-        "pdf_url":    pdf_url,
+        "report_url":   html_url,
+        "pdf_url":      pdf_url,
+        "panel_layout": panel_layout.to_dict(),
     }
 
 

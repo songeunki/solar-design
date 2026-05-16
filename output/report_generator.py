@@ -61,6 +61,7 @@ class ReportGenerator:
         lng: float | None = None,
         monthly_irradiance: list[float] | None = None,
         solar_altitude_deg: list[float] | None = None,
+        panel_layout: dict | None = None,
     ) -> Report:
         _OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -72,7 +73,7 @@ class ReportGenerator:
             solar_altitude_deg=solar_altitude_deg,
         )
         map_b64 = _fetch_static_map(lat, lng) if (lat and lng) else None
-        html_str = _render_html(summary, map_b64)
+        html_str = _render_html(summary, map_b64, panel_layout=panel_layout)
 
         html_path = _OUTPUT_DIR / f"{stem}.html"
         html_path.write_text(html_str, encoding="utf-8")
@@ -371,6 +372,88 @@ def _solar_altitude_chart(altitudes: list[float]) -> str:
     )
 
 
+def _panel_layout_svg(layout: dict) -> str:
+    """패널 배치도 SVG 생성."""
+    panels       = layout.get("panels", [])
+    roof_poly    = layout.get("roof_polygon", [])
+    pw_deg       = layout.get("panel_w_deg_lng", 0)
+    ph_deg       = layout.get("panel_h_deg_lat", 0)
+    stats        = layout.get("stats", {})
+
+    if not panels:
+        return ""
+
+    W, H = 680, 420
+    PAD  = {"t": 28, "r": 28, "b": 48, "l": 28}
+    dw   = W - PAD["l"] - PAD["r"]
+    dh   = H - PAD["t"] - PAD["b"]
+
+    all_lats = [p["lat"] for p in panels] + [p["lat"] + ph_deg for p in panels]
+    all_lngs = [p["lng"] for p in panels] + [p["lng"] + pw_deg for p in panels]
+    if roof_poly:
+        all_lats += [p["lat"] for p in roof_poly]
+        all_lngs += [p["lng"] for p in roof_poly]
+
+    min_lat, max_lat = min(all_lats), max(all_lats)
+    min_lng, max_lng = min(all_lngs), max(all_lngs)
+    lat_r = max_lat - min_lat or 1e-9
+    lng_r = max_lng - min_lng or 1e-9
+
+    def tx(lng):  return PAD["l"] + (lng  - min_lng) / lng_r * dw
+    def ty(lat):  return PAD["t"] + (max_lat - lat)  / lat_r * dh
+
+    # 지붕 윤곽
+    roof_pts = " ".join(f"{tx(p['lng']):.1f},{ty(p['lat']):.1f}" for p in roof_poly)
+    roof_svg = (
+        f'<polygon points="{roof_pts}" fill="rgba(241,245,249,0.9)"'
+        f' stroke="#a0aec0" stroke-width="1.5" stroke-dasharray="6,3"/>'
+        if roof_pts else ""
+    )
+
+    # 패널
+    px_w = max(2, pw_deg / lng_r * dw)
+    px_h = max(2, ph_deg / lat_r * dh)
+
+    color_map = {
+        "active": ("#1E6FD9", "rgba(30,111,217,0.65)"),
+        "shade":  ("#b91c1c", "rgba(220,38,38,0.50)"),
+        "buffer": ("#718096", "rgba(160,174,192,0.35)"),
+    }
+    panel_svgs = []
+    for p in panels:
+        sc, fc = color_map.get(p["status"], color_map["active"])
+        x = tx(p["lng"])
+        y = ty(p["lat"] + ph_deg)
+        panel_svgs.append(
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{px_w:.1f}" height="{px_h:.1f}"'
+            f' rx="1" fill="{fc}" stroke="{sc}" stroke-width="0.5"/>'
+        )
+
+    # 범례
+    legend = (
+        f'<rect x="{PAD["l"]}" y="{H-34}" width="12" height="8" rx="1" fill="rgba(30,111,217,0.65)" stroke="#1E6FD9" stroke-width="0.5"/>'
+        f'<text x="{PAD["l"]+16}" y="{H-27}" font-size="10" fill="#4a5568">설치 패널 ({stats.get("active_panels","-")}매)</text>'
+        f'<rect x="{PAD["l"]+130}" y="{H-34}" width="12" height="8" rx="1" fill="rgba(220,38,38,0.50)" stroke="#b91c1c" stroke-width="0.5"/>'
+        f'<text x="{PAD["l"]+146}" y="{H-27}" font-size="10" fill="#4a5568">음영 구역 ({stats.get("shaded_panels","-")}매)</text>'
+        f'<text x="{W-PAD["r"]}" y="{H-27}" text-anchor="end" font-size="10" fill="#718096">'
+        f'이격 {stats.get("row_spacing_m","?")}m | {stats.get("row_count","?")}행×{stats.get("col_count","?")}열</text>'
+    )
+
+    # 나침반
+    compass = (
+        f'<circle cx="{W-PAD["r"]-14}" cy="{PAD["t"]+14}" r="14" fill="white" stroke="#e2e8f0" stroke-width="1"/>'
+        f'<polygon points="{W-PAD["r"]-14},{PAD["t"]}" fill="#1E6FD9"/>'  # N
+        f'<text x="{W-PAD["r"]-14}" y="{PAD["t"]-2}" text-anchor="middle" font-size="8" font-weight="700" fill="#1E6FD9">N</text>'
+    )
+
+    return (
+        f'<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block;'
+        f'background:#f8faff;border-radius:8px;border:1px solid #e2e8f0">'
+        + roof_svg + "".join(panel_svgs) + legend + compass
+        + "</svg>"
+    )
+
+
 def _fmt(v) -> str:
     """값 포맷: bool → 한국어, 나머지 → 문자열"""
     if isinstance(v, bool):
@@ -404,7 +487,7 @@ def _elev_bar(deg: float, max_deg: float = 90.0) -> str:
     )
 
 
-def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
+def _render_html(s: dict, map_b64: str | None = None, panel_layout: dict | None = None) -> str:  # noqa: C901
     b  = s["건물정보"]
     r  = s["지붕분석"]
     e  = s["태양광시스템"]
@@ -611,6 +694,33 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
     )
     structural_section = card("🔩 구조 설계", two_col(str_left, str_right))
 
+    # ── 패널 배치도 ───────────────────────────────────────────────────────────
+    if panel_layout and panel_layout.get("panels"):
+        pl_stats = panel_layout.get("stats", {})
+        pl_legend = (
+            '<div style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
+            '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#4a5568">'
+            '<div style="width:12px;height:8px;border-radius:2px;background:rgba(30,111,217,0.65);border:1px solid #1E6FD9"></div>'
+            f'설치 패널 ({pl_stats.get("active_panels", "-")}매)</div>'
+            '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#4a5568">'
+            '<div style="width:12px;height:8px;border-radius:2px;background:rgba(220,38,38,0.50);border:1px solid #b91c1c"></div>'
+            f'음영 구역 ({pl_stats.get("shaded_panels", "-")}매)</div>'
+            f'<div style="margin-left:auto;font-size:11px;color:#718096">'
+            f'{pl_stats.get("row_count","?")}행 × {pl_stats.get("col_count","?")}열 · '
+            f'행 이격 {pl_stats.get("row_spacing_m","?")}m</div>'
+            '</div>'
+        )
+        pl_note = (
+            '<div style="font-size:11px;color:#a0aec0;margin-top:8px">'
+            f'동지 태양 고도각 기준 최소 이격 {pl_stats.get("min_gap_m","?")}m 적용 — 음영 없는 최적 배치</div>'
+        )
+        panel_layout_section = card(
+            "🔲 태양광 패널 가상 배치도",
+            pl_legend + _panel_layout_svg(panel_layout) + pl_note
+        )
+    else:
+        panel_layout_section = ""
+
     # ── 경제성 분석 ───────────────────────────────────────────────────────────
     ec_left = (
         row("예상 설치비", f"약 {ec['예상설치비_만원']:,} 만원") +
@@ -699,6 +809,7 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
   {system_section}
   {chart_section}
   {altitude_section}
+  {panel_layout_section}
   {structural_section}
   {economics_section}
   {notes_section}

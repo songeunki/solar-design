@@ -13,6 +13,7 @@ export default function SingleAnalysis() {
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [markerPos, setMarkerPos] = useState(null);
+  const [buildingPolygon, setBuildingPolygon] = useState(null);
 
   const wsRef = useRef(null);
   const statusRef = useRef(status);
@@ -32,6 +33,7 @@ export default function SingleAnalysis() {
     setMessage('연결 중…');
     setResult(null);
     setErrorMsg('');
+    setBuildingPolygon(null);
 
     // 분석 시작 즉시 Kakao 지오코딩으로 지도 마커 선제 이동
     if (window.kakao?.maps?.services) {
@@ -57,6 +59,9 @@ export default function SingleAnalysis() {
         setResult(msg.data);
         if (msg.data?.lat && msg.data?.lng) {
           setMarkerPos({ lat: msg.data.lat, lng: msg.data.lng });
+        }
+        if (msg.data?.panel_layout?.roof_polygon) {
+          setBuildingPolygon(msg.data.panel_layout.roof_polygon);
         }
         setStatus('done');
         setStep(5);
@@ -101,6 +106,7 @@ export default function SingleAnalysis() {
         <KakaoMap
           markerPos={markerPos}
           onMapClick={(addr) => startAnalysis({ address: addr })}
+          buildingPolygon={buildingPolygon}
         />
       </div>
 
@@ -141,7 +147,7 @@ export default function SingleAnalysis() {
               <button
                 className="btn btn-sm btn-outline"
                 style={{ marginLeft: 'auto', flexShrink: 0 }}
-                onClick={() => { setStatus('idle'); setResult(null); setMarkerPos(null); }}
+                onClick={() => { setStatus('idle'); setResult(null); setMarkerPos(null); setBuildingPolygon(null); }}
               >
                 새 분석
               </button>

@@ -13,10 +13,12 @@ export default function KakaoMap({
   markerPos,
   onMapClick,
   height = 340,
+  buildingPolygon = null,   // [{lat, lng}] — 건물 윤곽 오버레이
 }) {
   const mapRef = useRef(null);
   const mapObjRef = useRef(null);
   const overlayRef = useRef(null);
+  const polygonRef = useRef(null);  // 건물 폴리곤 오버레이
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'skyview'
 
   // 카카오맵 SDK 초기화
@@ -131,6 +133,33 @@ export default function KakaoMap({
     if (!kakao?.maps) return;
     map.panTo(new kakao.maps.LatLng(center.lat, center.lng));
   }, [center]);
+
+  // 건물 폴리곤 오버레이 업데이트
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !window.kakao?.maps) return;
+    const { kakao } = window;
+
+    if (polygonRef.current) {
+      polygonRef.current.setMap(null);
+      polygonRef.current = null;
+    }
+
+    if (!buildingPolygon || buildingPolygon.length < 3) return;
+
+    const path = buildingPolygon.map(p => new kakao.maps.LatLng(p.lat, p.lng));
+    const polygon = new kakao.maps.Polygon({
+      path,
+      strokeWeight: 2,
+      strokeColor:  '#FF6B35',
+      strokeOpacity: 0.9,
+      strokeStyle:  'solid',
+      fillColor:    '#FF6B35',
+      fillOpacity:  0.12,
+    });
+    polygon.setMap(map);
+    polygonRef.current = polygon;
+  }, [buildingPolygon]);
 
   // ── 토글 버튼 스타일 헬퍼 ──────────────────────────────
   const btnStyle = (type) => ({
