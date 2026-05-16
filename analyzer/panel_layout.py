@@ -118,6 +118,28 @@ class PanelLayoutEngine:
         row_count = max(1, int(total_ns_m / row_spacing_m))
         col_count = max(1, int(total_ew_m / col_spacing_m))
 
+        # ── [DEBUG] 건물/격자 치수 확인 ──────────────────────────────────
+        print(
+            f"[PanelLayout] footprint={footprint:.0f}㎡ | "
+            f"building EW={building_ew_m:.2f}m NS={building_ns_m:.2f}m | "
+            f"avail EW={total_ew_m:.2f}m NS={total_ns_m:.2f}m | "
+            f"grid={row_count}행(NS)×{col_count}열(EW) | "
+            f"row_spacing={row_spacing_m:.3f}m col_spacing={col_spacing_m:.3f}m",
+            flush=True,
+        )
+        print(
+            f"[PanelLayout] azimuth={azimuth_deg}° "
+            f"rot_rad={rot_rad:.5f} cos={cos_r:.5f} sin={sin_r:.5f} | "
+            f"center=({lat:.6f},{lng:.6f}) | "
+            f"PANEL_W(EW)={PANEL_W}m PANEL_H(NS)={PANEL_H}m",
+            flush=True,
+        )
+        print(
+            f"[PanelLayout] 기대: col(열)→EW(lng+), row(행)→NS(lat+) | "
+            f"_to_latlon(x=EW,y=NS)→(lat+y/111320, lng+x/m_lng)",
+            flush=True,
+        )
+
         # ── 6. 단위 발전량 ────────────────────────────────────────────────
         total         = row_count * col_count
         base          = target_panel_count if (target_panel_count and target_panel_count > 0) else total
@@ -189,6 +211,39 @@ class PanelLayoutEngine:
                     status=status, kwh_year=kwh_val,
                     corners=corners,
                 ))
+
+        # ── [DEBUG] 첫/마지막 패널 좌표 및 방향 검증 ────────────────────
+        if panels:
+            p0 = next((p for p in panels if p.status != "buffer"), panels[0])
+            pN = next((p for p in reversed(panels) if p.status != "buffer"), panels[-1])
+            dlat_m = abs(pN.lat - p0.lat) * M_PER_DEG_LAT
+            dlng_m = abs(pN.lng - p0.lng) * m_lng
+            orient = "동서(가로) ✓" if dlng_m >= dlat_m else "남북(세로) ⚠️ 방향 이상!"
+            print(
+                f"[PanelLayout] 첫패널=({p0.lat:.6f},{p0.lng:.6f}) "
+                f"마지막=({pN.lat:.6f},{pN.lng:.6f})",
+                flush=True,
+            )
+            print(
+                f"[PanelLayout] δlat={dlat_m:.2f}m(NS) δlng={dlng_m:.2f}m(EW) → {orient}",
+                flush=True,
+            )
+            # 단일 패널 크기 검증 (corners 이용)
+            if p0.corners and len(p0.corners) == 4:
+                sw, se, nw = p0.corners[0], p0.corners[1], p0.corners[3]
+                p_ew = abs(se["lng"] - sw["lng"]) * m_lng
+                p_ns = abs(nw["lat"] - sw["lat"]) * M_PER_DEG_LAT
+                p_orient = "가로(landscape)" if p_ew > p_ns else "세로(portrait)"
+                print(
+                    f"[PanelLayout] 단일패널 EW={p_ew:.3f}m NS={p_ns:.3f}m → {p_orient}",
+                    flush=True,
+                )
+                print(
+                    f"[PanelLayout]   SW=({sw['lat']:.7f},{sw['lng']:.7f}) "
+                    f"SE=({se['lat']:.7f},{se['lng']:.7f}) "
+                    f"NW=({nw['lat']:.7f},{nw['lng']:.7f})",
+                    flush=True,
+                )
 
         # ── 10. 지붕 윤곽 폴리곤 (회전 포함) ─────────────────────────────
         if not roof_polygon:
