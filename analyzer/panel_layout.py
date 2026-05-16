@@ -92,6 +92,11 @@ class PanelLayoutEngine:
 
         m_lng = _m_per_deg_lng(lat)
 
+        # 디버그 print에서 참조하기 전에 미리 초기값 선언
+        rot_rad = 0.0
+        cos_r   = 1.0
+        sin_r   = 0.0
+
         # ── 1. 지붕 크기 추정 ─────────────────────────────────────────────
         # 남향 건물: 동서(EW)가 장변(가로), 남북(NS)이 단변(세로)
         footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
