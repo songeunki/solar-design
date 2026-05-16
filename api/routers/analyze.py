@@ -1,8 +1,10 @@
 from __future__ import annotations
 import asyncio
+import base64
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from api.pipeline import run_pipeline
@@ -15,6 +17,21 @@ class AnalyzeRequest(BaseModel):
 
 
 # ── REST ─────────────────────────────────────────────────────────────────────
+
+@router.get("/satellite-map")
+async def satellite_map(lat: float, lng: float, level: int = 2):
+    """Playwright로 위성지도 캡처 → PNG 반환. 3D 뷰어 지면 텍스처용."""
+    from output.report_generator import _fetch_static_map_square
+    loop = asyncio.get_running_loop()
+    try:
+        b64 = await loop.run_in_executor(None, _fetch_static_map_square, lat, lng, level)
+        if b64:
+            return Response(content=base64.b64decode(b64), media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        pass
+    raise HTTPException(status_code=404, detail="위성 이미지 캡처 실패")
+
 
 @router.post("/analyze")
 async def post_analyze(req: AnalyzeRequest):

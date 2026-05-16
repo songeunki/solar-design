@@ -82,6 +82,7 @@ class PanelLayoutEngine:
         sun_elevation_winter_deg: float,
         annual_generation_kwh: float,
         roof_polygon: list[dict] | None = None,
+        azimuth_deg: float = 180.0,
     ) -> PanelLayoutResult:
 
         m_lng = _m_per_deg_lng(lat)
@@ -163,6 +164,7 @@ class PanelLayoutEngine:
             "row_spacing_m":  round(row_spacing_m, 2),
             "col_spacing_m":  round(col_spacing_m, 2),
             "tilt_deg":       tilt_deg,
+            "azimuth_deg":    azimuth_deg,
             "panel_w_m":      PANEL_W,
             "panel_h_m":      PANEL_H,
             "min_gap_m":      round(min_gap_m, 2),

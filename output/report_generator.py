@@ -136,6 +136,53 @@ kakao.maps.load(function(){{
         tmp.unlink(missing_ok=True)
 
 
+def _fetch_static_map_square(lat: float, lng: float, level: int = 2) -> str | None:
+    """3D 뷰어용 정사각형 위성지도 캡처 (512×512). 실패 시 None."""
+    if not _PLAYWRIGHT_OK:
+        return None
+    try:
+        from config import KAKAO_JS_APP_KEY
+    except ImportError:
+        KAKAO_JS_APP_KEY = ""
+    if not KAKAO_JS_APP_KEY:
+        try:
+            from config import KAKAO_REST_API_KEY as KAKAO_JS_APP_KEY
+        except ImportError:
+            return None
+
+    size = 512
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>html,body,#m{{width:{size}px;height:{size}px;margin:0;padding:0;overflow:hidden}}</style>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_APP_KEY}&autoload=false"></script>
+</head><body><div id="m"></div><script>
+kakao.maps.load(function(){{
+    var map=new kakao.maps.Map(document.getElementById('m'),
+        {{center:new kakao.maps.LatLng({lat},{lng}),level:{level},
+          mapTypeId:kakao.maps.MapTypeId.SKYVIEW}});
+    setTimeout(function(){{document.title='ready';}},2200);
+}});
+</script></body></html>"""
+
+    import tempfile
+    tmp = pathlib.Path(tempfile.mktemp(suffix=".html"))
+    tmp.write_text(html, encoding="utf-8")
+    try:
+        with _sync_playwright() as pw:
+            browser = pw.chromium.launch(args=["--disable-web-security", "--no-sandbox"])
+            page = browser.new_page(viewport={"width": size, "height": size})
+            page.goto(tmp.as_uri(), wait_until="domcontentloaded")
+            page.wait_for_function("document.title==='ready'", timeout=14000)
+            img = page.screenshot()
+            browser.close()
+        return base64.b64encode(img).decode()
+    except Exception as e:
+        warnings.warn(f"정사각형 위성 캡처 실패: {e}", stacklevel=2)
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def _write_pdf(html_str: str, dest: pathlib.Path) -> str | None:
     if not _PLAYWRIGHT_OK:
         warnings.warn("playwright를 불러올 수 없어 PDF 생성을 건너뜁니다.", stacklevel=2)

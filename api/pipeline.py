@@ -69,6 +69,7 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         sun_elevation_winter_deg=roof.solar_elevations.get("동지", 29.4),
         annual_generation_kwh=electrical.annual_generation_kwh,
         roof_polygon=roof_polygon,
+        azimuth_deg=roof.azimuth_deg,
     )
 
     report = ReportGenerator().generate(
