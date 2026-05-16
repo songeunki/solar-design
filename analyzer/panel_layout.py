@@ -133,6 +133,10 @@ class PanelLayoutEngine:
         origin_lng = lng - (col_count * col_spacing_deg / 2)
 
         # ── 9. 패널 목록 생성 ─────────────────────────────────────────────
+        # 박공지붕: row_count // 2 기준으로 남/북 경사면 분리
+        # rows 0..r_split-1 → 남사면, rows r_split..row_count-1 → 북사면
+        r_split = row_count // 2 if roof_shape == "gable" else None
+
         panels: list[Panel] = []
         for r in range(row_count):
             for c in range(col_count):
@@ -140,18 +144,24 @@ class PanelLayoutEngine:
                 p_lng = origin_lng + c * col_spacing_deg
                 flat_idx = r * col_count + c
 
-                # target을 초과하는 패널은 buffer (표시만, 발전량 0)
-                if target_panel_count and flat_idx >= target_panel_count:
-                    status = "buffer"
+                if r_split is not None and r >= r_split:
+                    # 박공 북사면 — 북향 패널 (약 50% 효율)
+                    status   = "north"
+                    kwh_val  = kwh_per_panel * 0.5
+                elif target_panel_count and flat_idx >= target_panel_count:
+                    status   = "buffer"
+                    kwh_val  = 0.0
                 elif r == row_count - 1 and row_count > 2:
-                    status = "shade"
+                    # 비박공 최북단 행 (음영 수신 구역)
+                    status   = "shade"
+                    kwh_val  = kwh_per_panel
                 else:
-                    status = "active"
+                    status   = "active"
+                    kwh_val  = kwh_per_panel
 
                 panels.append(Panel(
                     row=r, col=c, lat=p_lat, lng=p_lng,
-                    status=status,
-                    kwh_year=kwh_per_panel if status != "buffer" else 0.0,
+                    status=status, kwh_year=kwh_val,
                 ))
 
         # ── 10. 지붕 윤곽 폴리곤 (기본: 장변×단변 직사각형) ─────────────
@@ -167,11 +177,15 @@ class PanelLayoutEngine:
 
         active_panels = [p for p in panels if p.status == "active"]
         shaded_panels = [p for p in panels if p.status == "shade"]
+        north_panels  = [p for p in panels if p.status == "north"]
+        # 표시되는 전체 패널 = 남사면(active+shade) + 북사면(north)
+        displayed_total = len(active_panels) + len(shaded_panels) + len(north_panels)
 
         stats = {
-            "total_panels":    total,
+            "total_panels":    displayed_total,
             "active_panels":   len(active_panels),
             "shaded_panels":   len(shaded_panels),
+            "north_panels":    len(north_panels),
             "row_count":       row_count,
             "col_count":       col_count,
             "row_spacing_m":   round(row_spacing_m, 2),

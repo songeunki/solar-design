@@ -116,34 +116,52 @@ export default function KakaoMap({
 
     if (!panelLayout?.panels?.length) return;
 
-    const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph } = panelLayout;
+    const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph,
+            center_lat: cLat, center_lng: cLng } = panelLayout;
+
+    // 방위각 회전 (azimuth=180°이면 0° → 변화 없음)
+    const azDeg  = panelLayout?.stats?.azimuth_deg ?? 180;
+    const rotRad = -((azDeg - 180) * Math.PI / 180);
+    const cosR   = Math.cos(rotRad);
+    const sinR   = Math.sin(rotRad);
+    const mLat   = 111320;
+    const mLng   = mLat * Math.cos((cLat ?? 37.5) * Math.PI / 180);
+
+    // 위경도 → 미터 → 회전 → 위경도
+    const rotPt = (lat, lng) => {
+      const dx = (lng - cLng) * mLng;
+      const dy = (lat - cLat) * mLat;
+      return new kakao.maps.LatLng(
+        cLat + (dx * sinR + dy * cosR) / mLat,
+        cLng + (dx * cosR - dy * sinR) / mLng,
+      );
+    };
 
     const COLOR = {
-      active: { stroke: '#1565c0', fill: 'rgba(30,111,217,0.5)'  },
-      shade:  { stroke: '#b91c1c', fill: 'rgba(255,107,53,0.4)'  },
-      buffer: { stroke: '#718096', fill: 'rgba(160,174,192,0.25)' },
+      active: { stroke: '#1565c0', fill: '#1E6FD9', opacity: 0.5  },
+      shade:  { stroke: '#b91c1c', fill: '#FF6B35', opacity: 0.4  },
+      north:  { stroke: '#003060', fill: '#0d3d8a', opacity: 0.45 },  // 북사면 진한 파랑
+      buffer: { stroke: '#718096', fill: '#a0aec0', opacity: 0.20 },
     };
 
     const newPolygons = panels.map((p) => {
+      if (p.status === 'buffer') return null;
       const c = COLOR[p.status] || COLOR.active;
-      // 패널 4개 꼭짓점 (SW → SE → NE → NW)
+      // 4개 꼭짓점을 azimuth 방향으로 회전
       const path = [
-        new kakao.maps.LatLng(p.lat,       p.lng),
-        new kakao.maps.LatLng(p.lat,       p.lng + pw),
-        new kakao.maps.LatLng(p.lat + ph,  p.lng + pw),
-        new kakao.maps.LatLng(p.lat + ph,  p.lng),
+        rotPt(p.lat,       p.lng),
+        rotPt(p.lat,       p.lng + pw),
+        rotPt(p.lat + ph,  p.lng + pw),
+        rotPt(p.lat + ph,  p.lng),
       ];
       const poly = new kakao.maps.Polygon({
         path,
-        strokeWeight:  1,
-        strokeColor:   c.stroke,
-        strokeOpacity: 0.9,
-        fillColor:     c.fill.replace('rgba(', '').replace(/,[^,]+\)$/, ''),
-        fillOpacity:   parseFloat(c.fill.match(/[\d.]+\)$/)?.[0] ?? '0.5'),
+        strokeWeight: 1, strokeColor: c.stroke, strokeOpacity: 0.9,
+        fillColor: c.fill, fillOpacity: c.opacity,
       });
       poly.setMap(map);
       return poly;
-    });
+    }).filter(Boolean);
 
     panelRefsRef.current = newPolygons;
 

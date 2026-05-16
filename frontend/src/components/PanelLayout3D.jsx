@@ -284,39 +284,58 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     const THICK    = 0.05;
     const PANEL_PH = stats.panel_h_m || 2.094;
     const panelGeo = new THREE.BoxGeometry(stats.panel_w_m || 1.134, THICK, PANEL_PH);
+
+    // 남사면 — 파란색 (효율 높음)
     const matActive = new THREE.MeshPhongMaterial({
       color: 0x1a56c4, specular: 0x4499ff, shininess: 90,
       transparent: true, opacity: 0.88,
     });
+    // 남사면 음영 행 — 주황색
     const matShade = new THREE.MeshPhongMaterial({
       color: 0xff6b35, specular: 0xff9966, shininess: 40,
       transparent: true, opacity: 0.78,
+    });
+    // 북사면 — 진한 남색 (효율 낮음, 색상으로 구분)
+    const matNorth = new THREE.MeshPhongMaterial({
+      color: 0x0a2864, specular: 0x1a3a7a, shininess: 50,
+      transparent: true, opacity: 0.82,
     });
 
     panels.forEach((p) => {
       if (p.status === 'buffer') return;
 
       const dx = (p.lng + pw_deg / 2 - center_lng) * mPerDegLng;
-      // lat가 클수록(북쪽) dz가 음수 → Z+=남(+), Z-=북(-)
+      // lat가 크면(북쪽) dz 음수: Z+=남(+), Z-=북(-)
       const dz = -((p.lat + ph_deg / 2 - center_lat) * M_PER_DEG_LAT);
 
-      // 박공/팔작: 남사면(dz≥0)에만 패널 — 북사면은 표시 안 함
-      if ((effectiveRoofShape === 'gable' || effectiveRoofShape === 'hip') && dz < 0) return;
+      // 북사면 여부: status='north' 또는 경사지붕에서 dz<0
+      const isNorth = p.status === 'north' ||
+        ((effectiveRoofShape === 'gable' || effectiveRoofShape === 'hip') && dz < 0);
 
-      let panelY;
+      let panelY, rotX, mat;
+
       if (effectiveRoofShape === 'flat') {
-        // 평지붕: 패널 기저(남단 하면)이 bH에 닿도록 중심 Y 보정
+        // 평지붕: 남단 하면이 bH에 닿도록 Y 오프셋
         panelY = bH + (PANEL_PH / 2) * Math.sin(tiltRad) + THICK / 2;
+        rotX   = tiltRad;
+        mat    = p.status === 'shade' ? matShade : matActive;
+      } else if (isNorth) {
+        // 북사면: |dz|가 클수록 처마에 가까움, -tiltRad로 북향 기울임
+        const dzAbs = Math.max(0, Math.min(-dz, DZ / 2));
+        panelY = bH + rise * (1 - dzAbs / (DZ / 2)) + THICK / 2;
+        rotX   = -tiltRad;
+        mat    = matNorth;
       } else {
-        // 경사지붕 남사면: dz=0(용마루, Y=bH+rise) ~ dz=DZ/2(처마, Y=bH)
-        const dzClamped = Math.max(0, Math.min(dz, DZ / 2));
-        panelY = bH + rise * (1 - dzClamped / (DZ / 2)) + THICK / 2;
+        // 남사면: dz=0(용마루,최고) ~ dz=DZ/2(처마,bH)
+        const dzC = Math.max(0, Math.min(dz, DZ / 2));
+        panelY = bH + rise * (1 - dzC / (DZ / 2)) + THICK / 2;
+        rotX   = tiltRad;
+        mat    = p.status === 'shade' ? matShade : matActive;
       }
 
-      const mat  = p.status === 'shade' ? matShade : matActive;
       const mesh = new THREE.Mesh(panelGeo, mat);
       mesh.position.set(dx, panelY, dz);
-      mesh.rotation.x    = tiltRad;   // 경사면과 같은 각도로 기울임
+      mesh.rotation.x    = rotX;
       mesh.castShadow    = true;
       mesh.receiveShadow = true;
       scene.add(mesh);
