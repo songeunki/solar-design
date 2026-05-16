@@ -1,8 +1,12 @@
+import { useState, lazy, Suspense } from 'react';
 import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
 import PanelLayoutViewer from './PanelLayoutViewer';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
+
+// Three.js는 첫 클릭 시에만 로드 (번들 분리)
+const PanelLayout3D = lazy(() => import('./PanelLayout3D'));
 
 /**
  * ResultCards
@@ -10,6 +14,8 @@ import DownloadButtons from './DownloadButtons';
  *   result - 분석 결과 객체 (백엔드 /analyze 응답)
  */
 export default function ResultCards({ result }) {
+  const [layoutTab, setLayoutTab] = useState('2d'); // '2d' | '3d'
+
   if (!result) return null;
 
   const {
@@ -124,17 +130,55 @@ export default function ResultCards({ result }) {
         <BuildingInfo building={building} system={system} />
       </div>
 
-      {/* 패널 배치도 */}
+      {/* 패널 배치도 (2D / 3D 탭) */}
       {panel_layout && (
         <div className="card card-accent" style={{ marginTop: 16 }}>
           <div className="section-header">
             <div className="section-title-dot" />
             <span className="section-title">🔲 태양광 패널 가상 배치도</span>
-            <div className="badge badge-blue" style={{ marginLeft: 'auto' }}>
+
+            {/* 탭 전환 */}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              {[
+                { id: '2d', label: '📐 2D 배치도' },
+                { id: '3d', label: '🧊 3D 뷰어' },
+              ].map(({ id, label }) => (
+                <button key={id} onClick={() => setLayoutTab(id)} style={{
+                  padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontWeight: 600, fontSize: 12, transition: 'all 0.15s',
+                  background: layoutTab === id ? 'var(--blue)' : 'var(--bg)',
+                  color:      layoutTab === id ? 'white' : 'var(--text-secondary)',
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="badge badge-blue" style={{ marginLeft: 8 }}>
               640W × {panel_layout.stats?.active_panels ?? '-'}매
             </div>
           </div>
-          <PanelLayoutViewer layout={panel_layout} />
+
+          <div style={{ padding: '0 4px 4px' }}>
+            {layoutTab === '2d' ? (
+              <PanelLayoutViewer
+                layout={panel_layout}
+                lat={result.lat}
+              />
+            ) : (
+              <Suspense fallback={
+                <div style={{ height: 460, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+                  <span className="spinner" style={{ marginRight: 8 }} />3D 뷰어 로딩 중...
+                </div>
+              }>
+                <PanelLayout3D
+                  layout={panel_layout}
+                  building={result.building}
+                  lat={result.lat}
+                />
+              </Suspense>
+            )}
+          </div>
         </div>
       )}
 

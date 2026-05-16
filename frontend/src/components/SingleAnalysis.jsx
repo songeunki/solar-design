@@ -107,6 +107,7 @@ export default function SingleAnalysis() {
           markerPos={markerPos}
           onMapClick={(addr) => startAnalysis({ address: addr })}
           buildingPolygon={buildingPolygon}
+          panelLayout={status === 'done' ? result?.panel_layout : null}
         />
       </div>
 

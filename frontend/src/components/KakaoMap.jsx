@@ -3,213 +3,174 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * KakaoMap
  * props:
- *   center     - { lat, lng } 지도 중심 좌표
- *   markerPos  - { lat, lng, label } 마커 위치
- *   onMapClick - (address) => void  — 클릭 → 역지오코딩 → 주소 자동입력
- *   height     - 지도 높이 (기본 340px)
+ *   center          - { lat, lng }
+ *   markerPos       - { lat, lng, label }
+ *   onMapClick      - (address) => void
+ *   height          - 지도 높이
+ *   buildingPolygon - [{lat, lng}] 건물 윤곽 (주황)
+ *   panelLayout     - panel_layout 객체 → 패널 Polygon 렌더링
  */
 export default function KakaoMap({
   center,
   markerPos,
   onMapClick,
   height = 340,
-  buildingPolygon = null,   // [{lat, lng}] — 건물 윤곽 오버레이
+  buildingPolygon = null,
+  panelLayout = null,
 }) {
-  const mapRef = useRef(null);
-  const mapObjRef = useRef(null);
-  const overlayRef = useRef(null);
-  const polygonRef = useRef(null);  // 건물 폴리곤 오버레이
-  const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'skyview'
+  const mapRef      = useRef(null);
+  const mapObjRef   = useRef(null);
+  const overlayRef  = useRef(null);
+  const polygonRef  = useRef(null);          // 건물 윤곽 폴리곤
+  const panelRefsRef = useRef([]);           // 패널 Polygon 배열
+  const [mapType, setMapType] = useState('roadmap');
 
-  // 카카오맵 SDK 초기화
+  // ── 초기화 ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const initMap = () => {
       if (!mapRef.current || !window.kakao?.maps) return;
-
       const { kakao } = window;
-      const defaultCenter = new kakao.maps.LatLng(
-        center?.lat ?? 37.5665,
-        center?.lng ?? 126.978
-      );
-
       const map = new kakao.maps.Map(mapRef.current, {
-        center: defaultCenter,
+        center: new kakao.maps.LatLng(center?.lat ?? 37.5665, center?.lng ?? 126.978),
         level: 4,
         mapTypeId: kakao.maps.MapTypeId.ROADMAP,
       });
-
       mapObjRef.current = map;
 
-      // 클릭 → 역지오코딩
       if (onMapClick) {
-        const geocoder = new kakao.maps.services.Geocoder();
-        kakao.maps.event.addListener(map, 'click', (mouseEvent) => {
-          const latlng = mouseEvent.latLng;
-          geocoder.coord2Address(
-            latlng.getLng(),
-            latlng.getLat(),
-            (result, status) => {
-              if (status === kakao.maps.services.Status.OK) {
-                const addr =
-                  result[0]?.road_address?.address_name ||
-                  result[0]?.address?.address_name ||
-                  '';
-                if (addr) onMapClick(addr);
-              }
+        const geo = new kakao.maps.services.Geocoder();
+        kakao.maps.event.addListener(map, 'click', (e) => {
+          geo.coord2Address(e.latLng.getLng(), e.latLng.getLat(), (res, st) => {
+            if (st === kakao.maps.services.Status.OK) {
+              const addr = res[0]?.road_address?.address_name || res[0]?.address?.address_name || '';
+              if (addr) onMapClick(addr);
             }
-          );
+          });
         });
       }
     };
-
-    if (window.kakao?.maps) {
-      window.kakao.maps.load(initMap);
-    }
+    if (window.kakao?.maps) window.kakao.maps.load(initMap);
   }, []);
 
-  // 지도 타입 전환
+  // ── 지도 타입 전환 ──────────────────────────────────────────────────────
   const handleTypeChange = (type) => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
-    const { kakao } = window;
     map.setMapTypeId(
-      type === 'skyview'
-        ? kakao.maps.MapTypeId.SKYVIEW   // 위성 (하이브리드 없이 순수 위성)
-        : kakao.maps.MapTypeId.ROADMAP
+      type === 'skyview' ? window.kakao.maps.MapTypeId.SKYVIEW : window.kakao.maps.MapTypeId.ROADMAP
     );
     setMapType(type);
   };
 
-  // 마커/오버레이 업데이트 + panTo
+  // ── 마커 + panTo ────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
-    if (!map || !markerPos) return;
-
+    if (!map || !markerPos || !window.kakao?.maps) return;
     const { kakao } = window;
-    if (!kakao?.maps) return;
-
     const pos = new kakao.maps.LatLng(markerPos.lat, markerPos.lng);
 
     if (overlayRef.current) overlayRef.current.setMap(null);
-
-    const content = `
-      <div style="
-        background:#1E6FD9;
-        color:white;
-        padding:6px 12px;
-        border-radius:20px;
-        font-size:13px;
-        font-weight:600;
-        font-family:'Noto Sans KR',sans-serif;
-        white-space:nowrap;
-        box-shadow:0 4px 16px rgba(30,111,217,0.4);
-        position:relative;
-      ">
-        📍 ${markerPos.label || '분석 위치'}
-        <div style="
-          position:absolute;
-          bottom:-6px;left:50%;transform:translateX(-50%);
-          width:0;height:0;
-          border-left:6px solid transparent;
-          border-right:6px solid transparent;
-          border-top:6px solid #1E6FD9;
-        "></div>
-      </div>
-    `;
-
+    const content = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
+      📍 ${markerPos.label || '분석 위치'}
+      <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #1E6FD9;"></div>
+    </div>`;
     const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.4 });
     overlay.setMap(map);
     overlayRef.current = overlay;
-
     map.panTo(pos);
     map.setLevel(1);
   }, [markerPos]);
 
-  // 중심 이동
+  // ── 중심 이동 ────────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
-    if (!map || !center || markerPos) return;
-    const { kakao } = window;
-    if (!kakao?.maps) return;
-    map.panTo(new kakao.maps.LatLng(center.lat, center.lng));
+    if (!map || !center || markerPos || !window.kakao?.maps) return;
+    map.panTo(new window.kakao.maps.LatLng(center.lat, center.lng));
   }, [center]);
 
-  // 건물 폴리곤 오버레이 업데이트
+  // ── 건물 윤곽 폴리곤 ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !window.kakao?.maps) return;
+    const { kakao } = window;
+    if (polygonRef.current) { polygonRef.current.setMap(null); polygonRef.current = null; }
+    if (!buildingPolygon || buildingPolygon.length < 3) return;
+    const poly = new kakao.maps.Polygon({
+      path: buildingPolygon.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+      strokeWeight: 2, strokeColor: '#FF6B35', strokeOpacity: 0.9,
+      fillColor: '#FF6B35', fillOpacity: 0.12,
+    });
+    poly.setMap(map);
+    polygonRef.current = poly;
+  }, [buildingPolygon]);
+
+  // ── 패널 Polygon 렌더링 ──────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
     const { kakao } = window;
 
-    if (polygonRef.current) {
-      polygonRef.current.setMap(null);
-      polygonRef.current = null;
-    }
+    // 기존 패널 폴리곤 제거
+    panelRefsRef.current.forEach(p => p.setMap(null));
+    panelRefsRef.current = [];
 
-    if (!buildingPolygon || buildingPolygon.length < 3) return;
+    if (!panelLayout?.panels?.length) return;
 
-    const path = buildingPolygon.map(p => new kakao.maps.LatLng(p.lat, p.lng));
-    const polygon = new kakao.maps.Polygon({
-      path,
-      strokeWeight: 2,
-      strokeColor:  '#FF6B35',
-      strokeOpacity: 0.9,
-      strokeStyle:  'solid',
-      fillColor:    '#FF6B35',
-      fillOpacity:  0.12,
+    const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph } = panelLayout;
+
+    const COLOR = {
+      active: { stroke: '#1565c0', fill: 'rgba(30,111,217,0.5)'  },
+      shade:  { stroke: '#b91c1c', fill: 'rgba(255,107,53,0.4)'  },
+      buffer: { stroke: '#718096', fill: 'rgba(160,174,192,0.25)' },
+    };
+
+    const newPolygons = panels.map((p) => {
+      const c = COLOR[p.status] || COLOR.active;
+      // 패널 4개 꼭짓점 (SW → SE → NE → NW)
+      const path = [
+        new kakao.maps.LatLng(p.lat,       p.lng),
+        new kakao.maps.LatLng(p.lat,       p.lng + pw),
+        new kakao.maps.LatLng(p.lat + ph,  p.lng + pw),
+        new kakao.maps.LatLng(p.lat + ph,  p.lng),
+      ];
+      const poly = new kakao.maps.Polygon({
+        path,
+        strokeWeight:  1,
+        strokeColor:   c.stroke,
+        strokeOpacity: 0.9,
+        fillColor:     c.fill.replace('rgba(', '').replace(/,[^,]+\)$/, ''),
+        fillOpacity:   parseFloat(c.fill.match(/[\d.]+\)$/)?.[0] ?? '0.5'),
+      });
+      poly.setMap(map);
+      return poly;
     });
-    polygon.setMap(map);
-    polygonRef.current = polygon;
-  }, [buildingPolygon]);
 
-  // ── 토글 버튼 스타일 헬퍼 ──────────────────────────────
+    panelRefsRef.current = newPolygons;
+
+    // 위성뷰로 자동 전환하여 패널이 잘 보이도록
+    if (mapType !== 'skyview') {
+      map.setMapTypeId(kakao.maps.MapTypeId.SKYVIEW);
+      setMapType('skyview');
+    }
+  }, [panelLayout]);
+
+  // ── 토글 버튼 스타일 ──────────────────────────────────────────────────────
   const btnStyle = (type) => ({
-    padding: '5px 12px',
-    fontSize: 12,
-    fontWeight: 700,
-    fontFamily: "'Noto Sans KR', sans-serif",
-    border: 'none',
-    cursor: 'pointer',
+    padding: '5px 12px', fontSize: 12, fontWeight: 700,
+    fontFamily: "'Noto Sans KR', sans-serif", border: 'none', cursor: 'pointer',
     transition: 'all 0.15s',
-    // 선택된 쪽
     ...(mapType === type
-      ? {
-          background: type === 'skyview' ? '#1E6FD9' : '#ffffff',
-          color:       type === 'skyview' ? '#ffffff' : '#1a202c',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
-        }
-      : {
-          background: 'transparent',
-          color: '#718096',
-        }),
+      ? { background: type === 'skyview' ? '#1E6FD9' : '#fff', color: type === 'skyview' ? '#fff' : '#1a202c', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }
+      : { background: 'transparent', color: '#718096' }),
   });
 
   return (
-    <div
-      className="map-wrapper"
-      style={height != null ? { height } : undefined}
-    >
-      {/* 지도 캔버스 */}
+    <div className="map-wrapper" style={height != null ? { height } : undefined}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-
-      {/* 지도 타입 토글 — 우상단 */}
       <div className="map-type-toggle">
-        <button
-          className="map-toggle-btn"
-          style={{ ...btnStyle('roadmap'), borderRadius: '7px 0 0 7px' }}
-          onClick={() => handleTypeChange('roadmap')}
-          title="일반 지도"
-        >
-          🗺 일반
-        </button>
+        <button className="map-toggle-btn" style={{ ...btnStyle('roadmap'), borderRadius: '7px 0 0 7px' }} onClick={() => handleTypeChange('roadmap')} title="일반 지도">🗺 일반</button>
         <div style={{ width: 1, background: 'rgba(0,0,0,0.1)', alignSelf: 'stretch' }} />
-        <button
-          className="map-toggle-btn"
-          style={{ ...btnStyle('skyview'), borderRadius: '0 7px 7px 0' }}
-          onClick={() => handleTypeChange('skyview')}
-          title="위성 지도"
-        >
-          🛰 위성
-        </button>
+        <button className="map-toggle-btn" style={{ ...btnStyle('skyview'), borderRadius: '0 7px 7px 0' }} onClick={() => handleTypeChange('skyview')} title="위성 지도">🛰 위성</button>
       </div>
     </div>
   );
