@@ -109,8 +109,9 @@ class PanelLayoutEngine:
         # ── 1. 건물 footprint ─────────────────────────────────────────────
         footprint     = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
         _ASPECT       = 1.5
-        building_ew_m = math.sqrt(footprint * _ASPECT)   # 동서 장변
-        building_ns_m = math.sqrt(footprint / _ASPECT)   # 남북 단변
+        # 실제 건물 장축이 남북(NS) → NS 장변, EW 단변
+        building_ns_m = math.sqrt(footprint * _ASPECT)   # 남북 장변
+        building_ew_m = math.sqrt(footprint / _ASPECT)   # 동서 단변
 
         # ── 2. 외곽 경계 여유 (1 m) ──────────────────────────────────────
         MARGIN   = 1.0
@@ -128,13 +129,13 @@ class PanelLayoutEngine:
         col_spacing_m = PANEL_W + 0.05
 
         # ── 5. 행/열 수 ──────────────────────────────────────────────────
-        row_count = max(1, int(avail_ns / row_spacing_m))   # NS → 행(적음)
-        col_count = max(1, int(avail_ew / col_spacing_m))   # EW → 열(많음)
+        row_count = max(1, int(avail_ns / row_spacing_m))   # NS 장변 → 행(많음)
+        col_count = max(1, int(avail_ew / col_spacing_m))   # EW 단변 → 열(적음)
 
         # ── [DEBUG] ───────────────────────────────────────────────────────
         print(
             f"[PanelLayout] footprint={footprint:.0f}㎡ "
-            f"EW={building_ew_m:.2f}m(장변) NS={building_ns_m:.2f}m(단변) | "
+            f"EW={building_ew_m:.2f}m(단변) NS={building_ns_m:.2f}m(장변) | "
             f"avail EW={avail_ew:.2f}m NS={avail_ns:.2f}m | "
             f"grid={row_count}행(NS)×{col_count}열(EW) | "
             f"row_sp={row_spacing_m:.3f}m col_sp={col_spacing_m:.3f}m | "
