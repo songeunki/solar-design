@@ -126,6 +126,31 @@ export default function KakaoMap({
       buffer: { stroke: '#718096', fill: '#a0aec0', opacity: 0.20 },
     };
 
+    // ── [DEBUG] 첫 번째 non-buffer 패널 좌표 콘솔 출력 ─────────────────
+    const firstP = panels.find(p => p.status !== 'buffer');
+    if (firstP) {
+      const M = 111320;
+      const mLng = M * Math.cos(firstP.lat * Math.PI / 180);
+      if (firstP.corners?.length === 4) {
+        const [sw, se, ne, nw] = firstP.corners;
+        const ewM = (se.lng - sw.lng) * mLng;
+        const nsM = (ne.lat - se.lat) * M;
+        const dLatSW_SE = (se.lat - sw.lat) * M;  // 0이어야 landscape
+        const dLngSW_SE = (se.lng - sw.lng) * mLng; // EW폭 이어야 landscape
+        console.log('[KakaoMap] corners 사용 (p.corners.length=4)');
+        console.log(`  SW: lat=${sw.lat.toFixed(7)}, lng=${sw.lng.toFixed(7)}`);
+        console.log(`  SE: lat=${se.lat.toFixed(7)}, lng=${se.lng.toFixed(7)}`);
+        console.log(`  NE: lat=${ne.lat.toFixed(7)}, lng=${ne.lng.toFixed(7)}`);
+        console.log(`  NW: lat=${nw.lat.toFixed(7)}, lng=${nw.lng.toFixed(7)}`);
+        console.log(`  SW→SE: Δlat=${dLatSW_SE.toFixed(3)}m (0=정상), Δlng=${dLngSW_SE.toFixed(3)}m (≈2.094=정상)`);
+        console.log(`  EW폭=${ewM.toFixed(3)}m  NS높이=${nsM.toFixed(3)}m → ${ewM > nsM ? 'landscape✓' : 'portrait⚠️'}`);
+      } else {
+        console.log('[KakaoMap] corners 없음 → fallback 사용');
+        console.log(`  p.lat=${firstP.lat.toFixed(7)}, p.lng=${firstP.lng.toFixed(7)}`);
+        console.log(`  pw(EW deg)=${pw?.toFixed(8)}, ph(NS deg)=${ph?.toFixed(8)}`);
+      }
+    }
+
     const newPolygons = panels.map((p) => {
       if (p.status === 'buffer') return null;
       const c = COLOR[p.status] || COLOR.active;
