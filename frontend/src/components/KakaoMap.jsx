@@ -88,44 +88,22 @@ export default function KakaoMap({
     map.panTo(new window.kakao.maps.LatLng(center.lat, center.lng));
   }, [center]);
 
-  // ── 건물 윤곽 폴리곤 (패널과 동일한 azimuth 회전 적용) ─────────────────
+  // ── 건물 윤곽 폴리곤 ─────────────────────────────────────────────────────
+  // panel_layout.py에서 azimuth 회전이 roof_polygon 좌표에 이미 반영됨 → 그대로 사용
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
     const { kakao } = window;
     if (polygonRef.current) { polygonRef.current.setMap(null); polygonRef.current = null; }
     if (!buildingPolygon || buildingPolygon.length < 3) return;
-
-    // 건물 중심: panelLayout이 있으면 사용, 없으면 폴리곤 평균값
-    const cLat = panelLayout?.center_lat
-      ?? buildingPolygon.reduce((s, p) => s + p.lat, 0) / buildingPolygon.length;
-    const cLng = panelLayout?.center_lng
-      ?? buildingPolygon.reduce((s, p) => s + p.lng, 0) / buildingPolygon.length;
-
-    const azDeg  = panelLayout?.stats?.azimuth_deg ?? 180;
-    const rotRad = -((azDeg - 180) * Math.PI / 180);
-    const cosR   = Math.cos(rotRad);
-    const sinR   = Math.sin(rotRad);
-    const mLat   = 111320;
-    const mLng   = mLat * Math.cos(cLat * Math.PI / 180);
-
-    const rotPtB = (lat, lng) => {
-      const dx = (lng - cLng) * mLng;
-      const dy = (lat - cLat) * mLat;
-      return new kakao.maps.LatLng(
-        cLat + (dx * sinR + dy * cosR) / mLat,
-        cLng + (dx * cosR - dy * sinR) / mLng,
-      );
-    };
-
     const poly = new kakao.maps.Polygon({
-      path: buildingPolygon.map(p => rotPtB(p.lat, p.lng)),
+      path: buildingPolygon.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
       strokeWeight: 2, strokeColor: '#FF6B35', strokeOpacity: 0.9,
       fillColor: '#FF6B35', fillOpacity: 0.12,
     });
     poly.setMap(map);
     polygonRef.current = poly;
-  }, [buildingPolygon, panelLayout]);
+  }, [buildingPolygon]);
 
   // ── 패널 Polygon 렌더링 ──────────────────────────────────────────────────
   useEffect(() => {
@@ -139,44 +117,30 @@ export default function KakaoMap({
 
     if (!panelLayout?.panels?.length) return;
 
-    const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph,
-            center_lat: cLat, center_lng: cLng } = panelLayout;
-
-    // 방위각 회전 (azimuth=180°이면 0° → 변화 없음)
-    const azDeg  = panelLayout?.stats?.azimuth_deg ?? 180;
-    const rotRad = -((azDeg - 180) * Math.PI / 180);
-    const cosR   = Math.cos(rotRad);
-    const sinR   = Math.sin(rotRad);
-    const mLat   = 111320;
-    const mLng   = mLat * Math.cos((cLat ?? 37.5) * Math.PI / 180);
-
-    // 위경도 → 미터 → 회전 → 위경도
-    const rotPt = (lat, lng) => {
-      const dx = (lng - cLng) * mLng;
-      const dy = (lat - cLat) * mLat;
-      return new kakao.maps.LatLng(
-        cLat + (dx * sinR + dy * cosR) / mLat,
-        cLng + (dx * cosR - dy * sinR) / mLng,
-      );
-    };
+    const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph } = panelLayout;
 
     const COLOR = {
       active: { stroke: '#1565c0', fill: '#1E6FD9', opacity: 0.5  },
       shade:  { stroke: '#b91c1c', fill: '#FF6B35', opacity: 0.4  },
-      north:  { stroke: '#003060', fill: '#0d3d8a', opacity: 0.45 },  // 북사면 진한 파랑
+      north:  { stroke: '#003060', fill: '#0d3d8a', opacity: 0.45 },
       buffer: { stroke: '#718096', fill: '#a0aec0', opacity: 0.20 },
     };
 
     const newPolygons = panels.map((p) => {
       if (p.status === 'buffer') return null;
       const c = COLOR[p.status] || COLOR.active;
-      // 4개 꼭짓점을 azimuth 방향으로 회전
-      const path = [
-        rotPt(p.lat,       p.lng),
-        rotPt(p.lat,       p.lng + pw),
-        rotPt(p.lat + ph,  p.lng + pw),
-        rotPt(p.lat + ph,  p.lng),
-      ];
+
+      // panel_layout.py에서 미터 공간 회전 후 계산된 corners 사용
+      // corners 없으면 axis-aligned 폴백 (하위 호환)
+      const path = (p.corners?.length === 4)
+        ? p.corners.map(v => new kakao.maps.LatLng(v.lat, v.lng))
+        : [
+            new kakao.maps.LatLng(p.lat,       p.lng),
+            new kakao.maps.LatLng(p.lat,       p.lng + pw),
+            new kakao.maps.LatLng(p.lat + ph,  p.lng + pw),
+            new kakao.maps.LatLng(p.lat + ph,  p.lng),
+          ];
+
       const poly = new kakao.maps.Polygon({
         path,
         strokeWeight: 1, strokeColor: c.stroke, strokeOpacity: 0.9,

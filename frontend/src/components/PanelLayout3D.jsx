@@ -64,15 +64,17 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     '| building.roofShape:', building.roofShape,
   );
 
-  const bFloors     = building.floor    || 3;
-  const bAreaM2     = building.area     || 200;
-  const archAreaM2  = building.archArea || bAreaM2;
-  // 건물 footprint: stats 우선, 없으면 남북 장변(1.5x)/동서 단변(1/1.5x) 비율 추정
-  const DX = stats.building_ew_m || Math.sqrt(archAreaM2 / 1.5);  // 동서 단변 (m, 폭)
-  const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 * 1.5);  // 남북 장변 (m, 깊이)
+  const bFloors    = building.floor    || 3;
+  const bAreaM2    = building.area     || 200;
+  const archAreaM2 = building.archArea || bAreaM2;
+  // 건물 footprint: stats 우선, 없으면 동서 장변(1.5x)/남북 단변(1/1.5x) 비율
+  const DX = stats.building_ew_m || Math.sqrt(archAreaM2 * 1.5);  // 동서 장변 (long)
+  const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 / 1.5);  // 남북 단변 (short)
   const Dmax = Math.max(DX, DZ);
   const bH  = bFloors * 3.0;
-  // rise: 박공/팔작 지붕의 남사면 고저차
+  // Kakao Maps level=2 위성 캡처 반경 — 지면 PlaneGeometry 크기 결정
+  const captureRadiusM = stats.capture_radius_m ?? 120;
+  // rise: 박공/팔작 남사면 고저차 (남북 단변 DZ/2 기준)
   const rise = (effectiveRoofShape === 'flat') ? 0 : (DZ / 2) * Math.tan(tiltRad);
 
   // ── 태양 위치 → 조명 업데이트 ──────────────────────────────────────────
@@ -120,7 +122,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     scene.fog   = new THREE.FogExp2(0xd4e3f5, 0.006);
 
     // ── Camera ─────────────────────────────────────────────────────────
-    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, captureRadiusM * 8);
     camera.position.set(Dmax * 1.1, bH + 18, Dmax * 1.6);
     camera.lookAt(0, bH * 0.5, 0);
     cameraRef.current = camera;
@@ -131,12 +133,13 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     controls.enableDamping  = true;
     controls.dampingFactor  = 0.08;
     controls.minDistance    = 8;
-    controls.maxDistance    = 250;
+    controls.maxDistance    = captureRadiusM * 3;  // 위성 커버리지만큼 패닝 가능
     controls.maxPolarAngle  = Math.PI / 2 - 0.04;
     controlsRef.current = controls;
 
     // ── 지면 (위성 텍스처 또는 회색) ──────────────────────────────────
-    const groundSize = Dmax * 4;
+    // groundSize = captureRadiusM * 2 : 위성 이미지 실제 커버리지와 1:1 일치
+    const groundSize = captureRadiusM * 2;
     const groundGeo  = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat  = new THREE.MeshLambertMaterial({ color: 0xa8c090 });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
