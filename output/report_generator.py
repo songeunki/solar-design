@@ -59,12 +59,16 @@ class ReportGenerator:
         structural: StructuralDesign,
         lat: float | None = None,
         lng: float | None = None,
+        monthly_irradiance: list[float] | None = None,
     ) -> Report:
         _OUTPUT_DIR.mkdir(exist_ok=True)
 
         ts      = datetime.datetime.now()
         stem    = _file_stem(address, ts)
-        summary = _build_summary(address, ts, building, roof, electrical, structural)
+        summary = _build_summary(
+            address, ts, building, roof, electrical, structural,
+            monthly_irradiance=monthly_irradiance,
+        )
         map_b64 = _fetch_static_map(lat, lng) if (lat and lng) else None
         html_str = _render_html(summary, map_b64)
 
@@ -176,6 +180,7 @@ def _build_summary(
     roof: RoofAnalysis,
     electrical: ElectricalDesign,
     structural: StructuralDesign,
+    monthly_irradiance: list[float] | None = None,
 ) -> dict:
     economics = _calc_economics(electrical)
     notes = list(structural.structural_notes)
@@ -208,6 +213,7 @@ def _build_summary(
             "총용량_kW": electrical.total_capacity_kw,
             "연간발전량_kWh": electrical.annual_generation_kwh,
             "월별발전량_kWh": electrical.monthly_generation_kwh,
+            "월별일사량_kWh_m2": monthly_irradiance or [],
             "인버터용량_kW": electrical.inverter_capacity_kw,
             "직병렬구성": electrical.string_config,
             "배선사양": electrical.wiring_spec,
@@ -240,13 +246,14 @@ def _calc_economics(e: ElectricalDesign) -> dict:
 _MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"]
 
 
-def _monthly_chart(values: list[float]) -> str:
-    """월별 발전량 SVG — 오렌지 막대 + 파란 꺾은선"""
+def _monthly_chart(values: list[float], irradiance: list[float] | None = None) -> str:
+    """월별 발전량 SVG — 오렌지 막대(발전량) + 파란 꺾은선(일사량, 데이터 있을 때만)"""
     W, H = 680, 220
     PL, PR, PT, PB = 52, 16, 24, 40
     cw = W - PL - PR
     ch = H - PT - PB
-    max_v = max(values) if values else 1
+    max_v   = max(values)   if values     else 1
+    max_irr = max(irradiance) if irradiance else 1
     slot = cw / 12
     bw   = slot * 0.55
 
@@ -263,26 +270,31 @@ def _monthly_chart(values: list[float]) -> str:
         x  = PL + i * slot + (slot - bw) / 2
         y  = PT + ch - bh
         cx = PL + i * slot + slot / 2
-        cy = PT + ch - (v / max_v) * ch if max_v else PT + ch
-        pts.append(f"{cx:.1f},{cy:.1f}")
         bars += [
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" rx="3" fill="#FF6B35" opacity="0.9"/>',
             f'<text x="{cx:.1f}" y="{y-5:.1f}" text-anchor="middle" font-size="9" fill="#FF6B35" font-weight="700">{v:.0f}</text>',
             f'<text x="{cx:.1f}" y="{PT+ch+18:.1f}" text-anchor="middle" font-size="10" fill="#718096">{_MONTHS[i]}</text>',
         ]
+        if irradiance and i < len(irradiance):
+            cy = PT + ch - (irradiance[i] / max_irr) * ch if max_irr else PT + ch
+            pts.append(f"{cx:.1f},{cy:.1f}")
 
-    poly = (
-        f'<polyline points="{" ".join(pts)}" fill="none" stroke="#1E6FD9"'
-        f' stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
-    )
-    dots = "".join(
-        f'<circle cx="{p.split(",")[0]}" cy="{p.split(",")[1]}" r="3.5"'
-        f' fill="white" stroke="#1E6FD9" stroke-width="2.5"/>'
-        for p in pts
-    )
+    line_svg = ""
+    if pts:
+        poly = (
+            f'<polyline points="{" ".join(pts)}" fill="none" stroke="#1E6FD9"'
+            f' stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+        )
+        dots = "".join(
+            f'<circle cx="{p.split(",")[0]}" cy="{p.split(",")[1]}" r="3.5"'
+            f' fill="white" stroke="#1E6FD9" stroke-width="2.5"/>'
+            for p in pts
+        )
+        line_svg = poly + dots
+
     return (
         f'<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block">'
-        + "".join(grid) + "".join(bars) + poly + dots + "</svg>"
+        + "".join(grid) + "".join(bars) + line_svg + "</svg>"
     )
 
 
@@ -452,16 +464,23 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
     system_section = card("⚡ 태양광 시스템 사양", two_col(sys_left, sys_right))
 
     # ── 월별 발전량 ───────────────────────────────────────────────────────────
-    chart_legend = (
-        '<div style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap">'
+    irr_data = e.get("월별일사량_kWh_m2") or None
+    chart_legend_items = (
         '<div style="display:flex;align-items:center;gap:6px;font-size:12px;'
         'font-weight:500;color:#4a5568">'
         '<div style="width:10px;height:10px;border-radius:2px;background:#FF6B35"></div>'
         '월별 발전량 (kWh)</div>'
-        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;'
-        'font-weight:500;color:#4a5568">'
-        '<div style="width:10px;height:10px;border-radius:50%;background:#1E6FD9"></div>'
-        '발전량 추이</div></div>'
+    )
+    if irr_data:
+        chart_legend_items += (
+            '<div style="display:flex;align-items:center;gap:6px;font-size:12px;'
+            'font-weight:500;color:#4a5568">'
+            '<div style="width:10px;height:10px;border-radius:50%;background:#1E6FD9"></div>'
+            '일사량 (kWh/m²)</div>'
+        )
+    chart_legend = (
+        '<div style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap">'
+        + chart_legend_items + '</div>'
     )
     chart_note = (
         '<div style="font-size:11px;color:#a0aec0;text-align:right;margin-top:4px">'
@@ -469,7 +488,7 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
     )
     chart_section = card(
         "📊 월별 예상 발전량",
-        chart_legend + _monthly_chart(e["월별발전량_kWh"]) + chart_note
+        chart_legend + _monthly_chart(e["월별발전량_kWh"], irradiance=irr_data) + chart_note
     )
 
     # ── 구조 설계 ─────────────────────────────────────────────────────────────

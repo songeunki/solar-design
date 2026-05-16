@@ -77,7 +77,7 @@ export default function ResultCards({ result }) {
           <div className="card card-accent">
             <div className="section-header">
               <div className="section-title-dot" />
-              <span className="section-title">📊 월별 발전량 예측</span>
+              <span className="section-title">📊 월별 예상 발전량</span>
               <div className="badge badge-green" style={{ marginLeft: 'auto' }}>
                 <span className="badge-dot" />분석 완료
               </div>

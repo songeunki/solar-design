@@ -48,6 +48,7 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     report = ReportGenerator().generate(
         address, building, roof, electrical, structural,
         lat=location.lat, lng=location.lng,
+        monthly_irradiance=weather.monthly_irradiance,
     )
 
     # 경제성 (report_generator와 동일한 계산값 재사용)
