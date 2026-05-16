@@ -239,10 +239,20 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
             roof_area = round(tot_area / max(floors, 1), 1)
 
     roof_cd = item.get("roofCdNm", "")
-    if "경사" in roof_cd:
-        roof_type, slope = "경사지붕", 30.0
+    arch_area = float(item.get("archArea") or 0.0)
+
+    # roofCdNm 값으로 지붕 형상 결정
+    # 콘크리트 계열 → 평지붕, 슬레이트 → 박공, 기와 → 팔작, 나머지 경사 → 박공, 기타 → 평지붕
+    if "콘크리트" in roof_cd:
+        roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
+    elif "슬레이트" in roof_cd:
+        roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
+    elif "기와" in roof_cd:
+        roof_type, slope, roof_shape = "경사지붕", 30.0, "hip"
+    elif any(k in roof_cd for k in ("경사", "아스팔트", "금속", "징크")):
+        roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
     else:
-        roof_type, slope = "평지붕", 0.0
+        roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
 
     return BuildingInfo(
         address=address,
@@ -258,6 +268,8 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
             "total_floor_area_m2": float(item.get("totArea") or 0.0),
             "underground_floors":  int(item.get("ugrndFlrCnt") or 0),
             "roof_code":           roof_cd,
+            "roof_shape":          roof_shape,
+            "arch_area_m2":        arch_area,
         },
     )
 
@@ -330,7 +342,7 @@ def _fallback_info(
         roof_slope_deg=0.0,
         roof_azimuth_deg=180.0,
         structure="철근콘크리트구조",
-        extra={"fallback": True, "area_source": area_source},
+        extra={"fallback": True, "area_source": area_source, "roof_shape": "flat", "arch_area_m2": roof_area},
     )
 
 

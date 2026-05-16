@@ -60,6 +60,9 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     from analyzer.roof_capture import detect_building_polygon
     from config import KAKAO_JS_APP_KEY
 
+    roof_shape   = building.extra.get("roof_shape", "flat")
+    arch_area_m2 = building.extra.get("arch_area_m2") or building.roof_area_m2
+
     roof_polygon = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
@@ -70,6 +73,9 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         annual_generation_kwh=electrical.annual_generation_kwh,
         roof_polygon=roof_polygon,
         azimuth_deg=roof.azimuth_deg,
+        arch_area_m2=arch_area_m2,
+        roof_shape=roof_shape,
+        target_panel_count=electrical.panel_count,
     )
 
     report = ReportGenerator().generate(
@@ -99,10 +105,12 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         "lng":       location.lng,
         # ResultCards용 구조화 필드
         "building": {
-            "address":  address,
-            "floor":    building.floors,
-            "area":     building.extra.get("total_floor_area_m2") or building.roof_area_m2,
-            "roofType": building.roof_type,
+            "address":   address,
+            "floor":     building.floors,
+            "area":      building.extra.get("total_floor_area_m2") or building.roof_area_m2,
+            "archArea":  arch_area_m2,
+            "roofType":  building.roof_type,
+            "roofShape": roof_shape,
         },
         "system": {
             "panelCount":  electrical.panel_count,

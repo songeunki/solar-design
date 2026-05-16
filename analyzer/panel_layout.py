@@ -83,37 +83,41 @@ class PanelLayoutEngine:
         annual_generation_kwh: float,
         roof_polygon: list[dict] | None = None,
         azimuth_deg: float = 180.0,
+        arch_area_m2: float | None = None,
+        roof_shape: str = "flat",
+        target_panel_count: int | None = None,
     ) -> PanelLayoutResult:
 
         m_lng = _m_per_deg_lng(lat)
 
-        # ── 1. 지붕 크기 추정 ─────────────────────────────────────────────
-        side_m = math.sqrt(usable_area_m2)
-        half_ns_m = side_m / 2
-        half_ew_m = side_m / 2
+        # ── 1. 지붕 크기 추정 (건축면적 우선, 없으면 가용면적) ───────────
+        footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
+        side_m = math.sqrt(footprint)
 
-        # ── 2. 파라펫 버퍼 (10%) ─────────────────────────────────────────
-        buf_ratio = 0.10
-        avail_ns_m = half_ns_m * (1 - buf_ratio)
-        avail_ew_m = half_ew_m * (1 - buf_ratio)
+        # ── 2. 외곽 경계 여유 (1 m) ──────────────────────────────────────
+        MARGIN = 1.0
+        total_ns_m = max(0.0, side_m - 2 * MARGIN)
+        total_ew_m = max(0.0, side_m - 2 * MARGIN)
 
-        # ── 3. 행 이격거리 (동지 무음영) ──────────────────────────────────
+        # ── 3. 행 이격거리 (남북 방향, 동지 무음영) ──────────────────────
+        #   = 패널높이×cos(tilt) + 패널높이×sin(tilt)/tan(최저고도)
         elev_rad = math.radians(max(sun_elevation_winter_deg, 5.0))
         tilt_rad = math.radians(tilt_deg)
-        h_shadow = PANEL_H * math.sin(tilt_rad)            # 패널 투영 높이
-        min_gap_m = h_shadow / math.tan(elev_rad)          # 동지 최소 이격
+        h_shadow = PANEL_H * math.sin(tilt_rad)
+        min_gap_m = h_shadow / math.tan(elev_rad)
         row_spacing_m = PANEL_H * math.cos(tilt_rad) + min_gap_m
 
-        # ── 4. 열 간격 ────────────────────────────────────────────────────
-        col_spacing_m = PANEL_W + 0.05  # 측면 5cm 여유
+        # ── 4. 열 간격 (동서 방향, 최소 2% 이격) ─────────────────────────
+        col_spacing_m = PANEL_W * 1.02
 
         # ── 5. 행/열 수 ──────────────────────────────────────────────────
-        row_count = max(1, int((avail_ns_m * 2) / row_spacing_m))
-        col_count = max(1, int((avail_ew_m * 2) / col_spacing_m))
+        row_count = max(1, int(total_ns_m / row_spacing_m))
+        col_count = max(1, int(total_ew_m / col_spacing_m))
 
-        # ── 6. 실제 배치 총 패널 수로 단위 발전량 계산 ────────────────────
+        # ── 6. 단위 발전량 (target 기준으로 정규화) ──────────────────────
         total = row_count * col_count
-        kwh_per_panel = annual_generation_kwh / total if total > 0 else 0
+        base  = target_panel_count if (target_panel_count and target_panel_count > 0) else total
+        kwh_per_panel = annual_generation_kwh / base if base > 0 else 0
 
         # ── 7. 위경도 단위 변환 ───────────────────────────────────────────
         panel_h_deg = PANEL_H / M_PER_DEG_LAT
@@ -131,20 +135,26 @@ class PanelLayoutEngine:
             for c in range(col_count):
                 p_lat = origin_lat + r * row_spacing_deg
                 p_lng = origin_lng + c * col_spacing_deg
-                # 음영 구역: 최북단 행 (다른 패널 그림자를 받는 구역)
-                if r == row_count - 1 and row_count > 2:
+                flat_idx = r * col_count + c
+
+                # target을 초과하는 패널은 buffer (표시만, 발전량 0)
+                if target_panel_count and flat_idx >= target_panel_count:
+                    status = "buffer"
+                elif r == row_count - 1 and row_count > 2:
                     status = "shade"
                 else:
                     status = "active"
+
                 panels.append(Panel(
                     row=r, col=c, lat=p_lat, lng=p_lng,
-                    status=status, kwh_year=kwh_per_panel,
+                    status=status,
+                    kwh_year=kwh_per_panel if status != "buffer" else 0.0,
                 ))
 
         # ── 10. 지붕 윤곽 폴리곤 (기본: 사각형) ───────────────────────────
         if not roof_polygon:
-            half_ns_deg = half_ns_m / M_PER_DEG_LAT
-            half_ew_deg = half_ew_m / m_lng
+            half_ns_deg = (side_m / 2) / M_PER_DEG_LAT
+            half_ew_deg = (side_m / 2) / m_lng
             roof_polygon = [
                 {"lat": lat - half_ns_deg, "lng": lng - half_ew_deg},
                 {"lat": lat - half_ns_deg, "lng": lng + half_ew_deg},
@@ -152,8 +162,8 @@ class PanelLayoutEngine:
                 {"lat": lat + half_ns_deg, "lng": lng - half_ew_deg},
             ]
 
-        active_panels  = [p for p in panels if p.status == "active"]
-        shaded_panels  = [p for p in panels if p.status == "shade"]
+        active_panels = [p for p in panels if p.status == "active"]
+        shaded_panels = [p for p in panels if p.status == "shade"]
 
         stats = {
             "total_panels":   total,
@@ -168,6 +178,7 @@ class PanelLayoutEngine:
             "panel_w_m":      PANEL_W,
             "panel_h_m":      PANEL_H,
             "min_gap_m":      round(min_gap_m, 2),
+            "roof_shape":     roof_shape,
         }
 
         return PanelLayoutResult(
