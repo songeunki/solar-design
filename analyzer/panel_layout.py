@@ -92,12 +92,15 @@ class PanelLayoutEngine:
 
         # ── 1. 지붕 크기 추정 (건축면적 우선, 없으면 가용면적) ───────────
         footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
-        side_m = math.sqrt(footprint)
+        # 일반 건물 장변(동서):단변(남북) ≈ 1.5:1
+        _ASPECT       = 1.5
+        building_ew_m = math.sqrt(footprint * _ASPECT)   # 동서 장변
+        building_ns_m = math.sqrt(footprint / _ASPECT)   # 남북 단변
 
         # ── 2. 외곽 경계 여유 (1 m) ──────────────────────────────────────
         MARGIN = 1.0
-        total_ns_m = max(0.0, side_m - 2 * MARGIN)
-        total_ew_m = max(0.0, side_m - 2 * MARGIN)
+        total_ns_m = max(0.0, building_ns_m - 2 * MARGIN)
+        total_ew_m = max(0.0, building_ew_m - 2 * MARGIN)
 
         # ── 3. 행 이격거리 (남북 방향, 동지 무음영) ──────────────────────
         #   = 패널높이×cos(tilt) + 패널높이×sin(tilt)/tan(최저고도)
@@ -151,10 +154,10 @@ class PanelLayoutEngine:
                     kwh_year=kwh_per_panel if status != "buffer" else 0.0,
                 ))
 
-        # ── 10. 지붕 윤곽 폴리곤 (기본: 사각형) ───────────────────────────
+        # ── 10. 지붕 윤곽 폴리곤 (기본: 장변×단변 직사각형) ─────────────
         if not roof_polygon:
-            half_ns_deg = (side_m / 2) / M_PER_DEG_LAT
-            half_ew_deg = (side_m / 2) / m_lng
+            half_ns_deg = (building_ns_m / 2) / M_PER_DEG_LAT
+            half_ew_deg = (building_ew_m / 2) / m_lng
             roof_polygon = [
                 {"lat": lat - half_ns_deg, "lng": lng - half_ew_deg},
                 {"lat": lat - half_ns_deg, "lng": lng + half_ew_deg},
@@ -166,19 +169,21 @@ class PanelLayoutEngine:
         shaded_panels = [p for p in panels if p.status == "shade"]
 
         stats = {
-            "total_panels":   total,
-            "active_panels":  len(active_panels),
-            "shaded_panels":  len(shaded_panels),
-            "row_count":      row_count,
-            "col_count":      col_count,
-            "row_spacing_m":  round(row_spacing_m, 2),
-            "col_spacing_m":  round(col_spacing_m, 2),
-            "tilt_deg":       tilt_deg,
-            "azimuth_deg":    azimuth_deg,
-            "panel_w_m":      PANEL_W,
-            "panel_h_m":      PANEL_H,
-            "min_gap_m":      round(min_gap_m, 2),
-            "roof_shape":     roof_shape,
+            "total_panels":    total,
+            "active_panels":   len(active_panels),
+            "shaded_panels":   len(shaded_panels),
+            "row_count":       row_count,
+            "col_count":       col_count,
+            "row_spacing_m":   round(row_spacing_m, 2),
+            "col_spacing_m":   round(col_spacing_m, 2),
+            "tilt_deg":        tilt_deg,
+            "azimuth_deg":     azimuth_deg,
+            "panel_w_m":       PANEL_W,
+            "panel_h_m":       PANEL_H,
+            "min_gap_m":       round(min_gap_m, 2),
+            "roof_shape":      roof_shape,
+            "building_ew_m":   round(building_ew_m, 1),
+            "building_ns_m":   round(building_ns_m, 1),
         }
 
         return PanelLayoutResult(

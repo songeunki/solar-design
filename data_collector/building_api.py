@@ -238,21 +238,23 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
         if tot_area > 0:
             roof_area = round(tot_area / max(floors, 1), 1)
 
-    roof_cd = item.get("roofCdNm", "")
-    arch_area = float(item.get("archArea") or 0.0)
+    roof_cd      = (item.get("roofCdNm", "") or "").strip()
+    structure_cd = (item.get("strctCdNm", "") or "").strip()
+    arch_area    = float(item.get("archArea") or 0.0)
 
-    # roofCdNm 값으로 지붕 형상 결정
-    # 콘크리트 계열 → 평지붕, 슬레이트 → 박공, 기와 → 팔작, 나머지 경사 → 박공, 기타 → 평지붕
-    if "콘크리트" in roof_cd:
-        roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
-    elif "슬레이트" in roof_cd:
-        roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
-    elif "기와" in roof_cd:
+    # 지붕 형상 결정: 경사/기와 지시자 먼저, flat 지시자 그 다음, 식별 불가시 구조·용도 보조
+    if "기와" in roof_cd:
         roof_type, slope, roof_shape = "경사지붕", 30.0, "hip"
-    elif any(k in roof_cd for k in ("경사", "아스팔트", "금속", "징크")):
+    elif any(k in roof_cd for k in ("경사", "슬레이트", "아스팔트", "금속", "징크")):
         roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
-    else:
+    elif any(k in roof_cd for k in ("슬라브", "콘크리트", "평")):
         roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
+    else:
+        # roofCdNm 식별 불가 → 구조·용도 보조 추정
+        if any(k in structure_cd for k in ("목조", "조적")) and purpose in ("단독주택", "다가구주택"):
+            roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
+        else:
+            roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
 
     return BuildingInfo(
         address=address,
