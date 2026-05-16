@@ -124,7 +124,7 @@ export default function CompareAnalysis() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           {addresses.length < 4 && (
             <button className="btn btn-outline btn-sm" onClick={addAddress} disabled={status === 'loading'}>
               + 건물 추가
@@ -149,7 +149,7 @@ export default function CompareAnalysis() {
       </div>
 
       {/* 지도 */}
-      <KakaoMap markers={markers} height={280} />
+      <KakaoMap markers={markers} />
 
       {/* 프로그레스 */}
       {status === 'loading' && <ProgressBar step={step} message={message} />}

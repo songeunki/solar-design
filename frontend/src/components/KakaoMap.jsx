@@ -156,28 +156,15 @@ export default function KakaoMap({
   return (
     <div
       className="map-wrapper"
-      style={{ height, position: 'relative' }}
+      style={height != null ? { height } : undefined}
     >
       {/* 지도 캔버스 */}
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       {/* 지도 타입 토글 — 우상단 */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          zIndex: 10,
-          display: 'flex',
-          background: 'rgba(255,255,255,0.92)',
-          backdropFilter: 'blur(6px)',
-          borderRadius: 8,
-          overflow: 'hidden',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.18)',
-          border: '1px solid rgba(0,0,0,0.08)',
-        }}
-      >
+      <div className="map-type-toggle">
         <button
+          className="map-toggle-btn"
           style={{ ...btnStyle('roadmap'), borderRadius: '7px 0 0 7px' }}
           onClick={() => handleTypeChange('roadmap')}
           title="일반 지도"
@@ -186,6 +173,7 @@ export default function KakaoMap({
         </button>
         <div style={{ width: 1, background: 'rgba(0,0,0,0.1)', alignSelf: 'stretch' }} />
         <button
+          className="map-toggle-btn"
           style={{ ...btnStyle('skyview'), borderRadius: '0 7px 7px 0' }}
           onClick={() => handleTypeChange('skyview')}
           title="위성 지도"

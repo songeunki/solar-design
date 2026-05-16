@@ -71,7 +71,7 @@ export default function ResultCards({ result }) {
       </div>
 
       {/* 메인 컨텐츠 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+      <div className="result-main-grid">
         {/* 차트 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card card-accent">

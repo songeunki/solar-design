@@ -82,9 +82,10 @@ body {
 
 /* ===== 메인 레이아웃 ===== */
 .app-main {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 28px 24px 60px;
+  width: 100%;
 }
 
 /* ===== 카드 기본 ===== */
@@ -107,7 +108,7 @@ body {
 /* ===== KPI 카드 ===== */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -567,8 +568,35 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  margin-bottom: 20px;
-  height: 340px;
+  position: relative;
+  height: 400px;
+  flex-shrink: 0;
+}
+
+/* 지도 타입 토글 버튼 */
+.map-type-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.map-toggle-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Noto Sans KR', sans-serif;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 /* ===== 다운로드 버튼 ===== */
@@ -595,6 +623,14 @@ body {
   margin-top: 12px;
 }
 
+/* ===== 결과 메인 그리드 (chart + building info) ===== */
+.result-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
 /* ===== 비교 분석 ===== */
 .compare-grid {
   display: grid;
@@ -602,16 +638,88 @@ body {
   gap: 20px;
 }
 
-@media (max-width: 768px) {
-  .compare-grid { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: 1fr 1fr; }
-  .input-row { flex-direction: column; }
-  .app-header { padding: 0 16px; }
-  .app-main { padding: 16px 12px 40px; }
-  .tab-bar { flex-direction: column; }
+/* ===== Idle / 알림 상태 ===== */
+.idle-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1.5px dashed var(--border);
+  color: var(--text-muted);
+}
+.idle-icon { font-size: 48px; margin-bottom: 16px; line-height: 1; }
+.idle-title { font-size: 17px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+.idle-desc  { font-size: 14px; line-height: 1.7; max-width: 280px; }
+
+.alert-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.alert-error   { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
+.alert-success { background: var(--green-light); border: 1px solid rgba(46,204,113,0.3); color: #276749; }
+
+/* ══════════════════════════════════════
+   Tablet  (768px – 1279px)
+══════════════════════════════════════ */
+@media (max-width: 1279px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .result-main-grid { grid-template-columns: 1fr; }
+  .map-wrapper { height: 320px; }
 }
 
-@media (max-width: 480px) {
-  .kpi-grid { grid-template-columns: 1fr; }
+/* ══════════════════════════════════════
+   Mobile  (≤ 767px)
+══════════════════════════════════════ */
+@media (max-width: 767px) {
+  html { font-size: 15px; }
+
+  .app-header { padding: 0 14px; height: 52px; }
+  .header-logo { font-size: 16px; gap: 8px; }
+  .header-logo-icon { width: 28px; height: 28px; font-size: 15px; }
+  .header-badge { display: none; }
+
+  .app-main { padding: 14px 12px 48px; }
+
+  .tab-bar { padding: 4px; gap: 3px; }
+  .tab-btn  { padding: 9px 6px; font-size: 13px; gap: 4px; }
+
+  .kpi-grid  { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi-card  { padding: 14px; gap: 10px; }
   .kpi-value { font-size: 22px; }
+  .kpi-label { font-size: 11px; }
+  .kpi-icon  { width: 40px; height: 40px; font-size: 18px; }
+
+  .map-wrapper { height: 220px; }
+  .map-toggle-btn { padding: 4px 8px; font-size: 11px; }
+
+  .input-panel { padding: 16px; }
+  .input-panel-title { font-size: 14px; margin-bottom: 12px; }
+
+  .progress-step-label { display: none; }
+  .progress-step-circle { width: 28px; height: 28px; font-size: 11px; }
+  .progress-steps::before { top: 14px; left: 14px; right: 14px; }
+
+  .compare-grid { grid-template-columns: 1fr; }
+  .result-main-grid { grid-template-columns: 1fr; }
+
+  .section-header { padding: 14px 16px 12px; }
+  .chart-wrapper  { padding: 14px 16px; }
+  .info-row { font-size: 13px; }
+
+  .btn-lg { padding: 11px 20px; font-size: 14px; }
+  .idle-state { padding: 40px 20px; }
+  .idle-icon  { font-size: 36px; }
+  .idle-title { font-size: 15px; }
+
+  .alert-box { padding: 12px 14px; font-size: 13px; }
 }

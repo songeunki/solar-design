@@ -7,7 +7,7 @@ import KakaoMap from './KakaoMap';
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
 export default function SingleAnalysis() {
-  const [status, setStatus] = useState('idle'); // idle | loading | done | error
+  const [status, setStatus] = useState('idle');
   const [step, setStep] = useState(0);
   const [message, setMessage] = useState('');
   const [result, setResult] = useState(null);
@@ -15,14 +15,13 @@ export default function SingleAnalysis() {
   const [markerPos, setMarkerPos] = useState(null);
 
   const wsRef = useRef(null);
-  // stale closure 방지
   const statusRef = useRef(status);
   statusRef.current = status;
 
   const startAnalysis = useCallback(({ address }) => {
     if (statusRef.current === 'loading') return;
 
-    // 이전 WebSocket이 살아있으면 닫기
+    // 이전 WebSocket 정리
     if (wsRef.current && wsRef.current.readyState < 2) {
       wsRef.current.onclose = null;
       wsRef.current.close();
@@ -34,7 +33,7 @@ export default function SingleAnalysis() {
     setResult(null);
     setErrorMsg('');
 
-    // 분석 시작 즉시 Kakao 클라이언트 지오코딩으로 지도 이동
+    // 분석 시작 즉시 Kakao 지오코딩으로 지도 마커 선제 이동
     if (window.kakao?.maps?.services) {
       const geocoder = new window.kakao.maps.services.Geocoder();
       geocoder.addressSearch(address.trim(), (res, st) => {
@@ -47,13 +46,10 @@ export default function SingleAnalysis() {
     const ws = new WebSocket(`${WS_BASE}/ws/analyze`);
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ address }));
-    };
+    ws.onopen = () => ws.send(JSON.stringify({ address }));
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-
       if (msg.type === 'progress') {
         setStep(msg.step ?? 0);
         setMessage(msg.message ?? '');
@@ -84,94 +80,80 @@ export default function SingleAnalysis() {
     };
   }, []);
 
-  const handleMapClick = useCallback((address) => {
-    // 지도 클릭 시 주소 자동입력 — AddressInput으로 이벤트 전달할 방법이 없으므로
-    // 여기서는 간단히 바로 분석 시작 (필요시 ref로 input 값 세팅 가능)
-    startAnalysis({ address });
-  }, [startAnalysis]);
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* 입력 패널 */}
-      <div className="input-panel">
-        <div className="input-panel-title">
-          🏠 단일 건물 태양광 분석
-          <span className="badge badge-blue" style={{ marginLeft: 'auto' }}>
-            640W 패널 기준
-          </span>
+    <div className="analysis-layout">
+
+      {/* ── 사이드바: 입력 패널 + 지도 ── */}
+      <div className="analysis-sidebar">
+        <div className="input-panel">
+          <div className="input-panel-title">
+            🏠 단일 건물 태양광 분석
+            <span className="badge badge-blue" style={{ marginLeft: 'auto' }}>
+              640W 패널 기준
+            </span>
+          </div>
+          <AddressInput
+            onSubmit={startAnalysis}
+            disabled={status === 'loading'}
+          />
+          <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+            지도를 클릭하면 해당 위치로 바로 분석을 시작합니다
+          </p>
         </div>
-        <AddressInput
-          onSubmit={startAnalysis}
-          disabled={status === 'loading'}
+
+        <KakaoMap
+          markerPos={markerPos}
+          onMapClick={(addr) => startAnalysis({ address: addr })}
         />
       </div>
 
-      {/* 카카오맵 */}
-      <KakaoMap
-        markerPos={markerPos}
-        onMapClick={handleMapClick}
-        height={300}
-      />
+      {/* ── 콘텐츠: 결과 영역 ── */}
+      <div className="analysis-content">
 
-      {/* 프로그레스 */}
-      {status === 'loading' && (
-        <ProgressBar step={step} message={message} />
-      )}
+        {status === 'idle' && (
+          <div className="idle-state">
+            <div className="idle-icon">☀️</div>
+            <p className="idle-title">분석 준비 완료</p>
+            <p className="idle-desc">
+              좌측에서 주소를 입력하거나 지도를 클릭해 분석을 시작하세요
+            </p>
+          </div>
+        )}
 
-      {/* 에러 */}
-      {status === 'error' && (
-        <div
-          style={{
-            background: '#fff5f5',
-            border: '1px solid #fed7d7',
-            borderRadius: 'var(--radius-sm)',
-            padding: '16px 20px',
-            color: '#c53030',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-        >
-          ❌ {errorMsg}
-          <button
-            className="btn btn-sm"
-            style={{ marginLeft: 'auto', background: '#fed7d7', color: '#c53030', border: 'none' }}
-            onClick={() => setStatus('idle')}
-          >
-            다시 시도
-          </button>
-        </div>
-      )}
+        {status === 'loading' && (
+          <ProgressBar step={step} message={message} />
+        )}
 
-      {/* 결과 */}
-      {status === 'done' && result && (
-        <>
-          <div
-            style={{
-              background: 'var(--green-light)',
-              border: '1px solid rgba(46,204,113,0.3)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '12px 20px',
-              color: '#276749',
-              fontSize: 14,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            ✅ 분석이 완료되었습니다.
+        {status === 'error' && (
+          <div className="alert-box alert-error">
+            <span>❌ {errorMsg}</span>
             <button
-              className="btn btn-sm btn-outline"
-              style={{ marginLeft: 'auto' }}
-              onClick={() => { setStatus('idle'); setResult(null); }}
+              className="btn btn-sm"
+              style={{ marginLeft: 'auto', background: '#fed7d7', color: '#c53030', border: 'none', flexShrink: 0 }}
+              onClick={() => setStatus('idle')}
             >
-              새 분석
+              다시 시도
             </button>
           </div>
-          <ResultCards result={result} />
-        </>
-      )}
+        )}
+
+        {status === 'done' && result && (
+          <>
+            <div className="alert-box alert-success">
+              ✅ 분석이 완료되었습니다.
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ marginLeft: 'auto', flexShrink: 0 }}
+                onClick={() => { setStatus('idle'); setResult(null); setMarkerPos(null); }}
+              >
+                새 분석
+              </button>
+            </div>
+            <ResultCards result={result} />
+          </>
+        )}
+
+      </div>
     </div>
   );
 }

@@ -21,18 +21,18 @@ export default function App() {
       {/* ===== 메인 ===== */}
       <main className="app-main">
         {/* 탭 */}
-        <div className="tab-bar">
+        <div className="tab-bar" style={{ marginBottom: 20 }}>
           <button
             className={`tab-btn ${activeTab === 'single' ? 'active' : ''}`}
             onClick={() => setActiveTab('single')}
           >
-            🏠 단일 건물 분석
+            🏠 단일 분석
           </button>
           <button
             className={`tab-btn ${activeTab === 'compare' ? 'active' : ''}`}
             onClick={() => setActiveTab('compare')}
           >
-            ⚖️ 복수 건물 비교
+            ⚖️ 비교 분석
           </button>
         </div>
 
