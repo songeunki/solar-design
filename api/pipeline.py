@@ -1,11 +1,19 @@
 """파이프라인 공통 로직 — routers에서 재사용."""
 from __future__ import annotations
+import pathlib
 from typing import Callable
 
 # (step, total, message)
 ProgressCb = Callable[[int, int, str], None]
 
 _MONTHS_KR = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"]
+
+
+def _to_url(path: str | None) -> str | None:
+    """절대 파일 경로 → FastAPI /files 정적 서빙 URL로 변환."""
+    if not path:
+        return None
+    return f"/files/{pathlib.Path(path).name}"
 
 
 def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
@@ -49,11 +57,14 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     payback_year   = ec.get("단순회수기간_년", 0)
     net_profit_20y = round(yearly_revenue * 20 - install_cost)
 
+    html_url = _to_url(report.file_path)
+    pdf_url  = _to_url(report.pdf_path)
+
     return {
         # 보고서 원본
         "summary":   report.summary,
-        "html_path": report.file_path,
-        "pdf_path":  report.pdf_path,
+        "html_path": html_url,
+        "pdf_path":  pdf_url,
         "lat":       location.lat,
         "lng":       location.lng,
         # ResultCards용 구조화 필드
@@ -84,8 +95,8 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
             }
             for i in range(12)
         ],
-        "report_url": report.file_path,
-        "pdf_url":    report.pdf_path,
+        "report_url": html_url,
+        "pdf_url":    pdf_url,
     }
 
 
@@ -141,6 +152,6 @@ def run_compare_pipeline(
     report = ComparisonReportGenerator().generate(results)
 
     return {
-        "html_path": report.file_path,
+        "html_path": _to_url(report.file_path),
         "addresses": report.addresses,
     }
