@@ -72,8 +72,8 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
   const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 / 1.5);  // 남북 단변 (short)
   const Dmax = Math.max(DX, DZ);
   const bH  = bFloors * 3.0;
-  // Kakao Maps level=2 위성 캡처 반경 — 지면 PlaneGeometry 크기 결정
-  const captureRadiusM = stats.capture_radius_m ?? 120;
+  // Kakao Maps level=1 위성 캡처 반경 — 지면 PlaneGeometry 크기 결정
+  const captureRadiusM = stats.capture_radius_m ?? 75;
   // rise: 박공/팔작 남사면 고저차 (남북 단변 DZ/2 기준)
   const rise = (effectiveRoofShape === 'flat') ? 0 : (DZ / 2) * Math.tan(tiltRad);
 
@@ -138,8 +138,8 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     controlsRef.current = controls;
 
     // ── 지면 (위성 텍스처 또는 회색) ──────────────────────────────────
-    // groundSize = captureRadiusM * 2 : 위성 이미지 실제 커버리지와 1:1 일치
-    const groundSize = captureRadiusM * 2;
+    // groundSize = 150 : Kakao level=1 캡처 반경 75m × 2 (위성 이미지와 1:1)
+    const groundSize = 150;
     const groundGeo  = new THREE.PlaneGeometry(groundSize, groundSize);
     const groundMat  = new THREE.MeshLambertMaterial({ color: 0xa8c090 });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
@@ -151,7 +151,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     // 위성 텍스처 비동기 로드 (실패해도 회색으로 폴백)
     const loader = new THREE.TextureLoader();
     loader.load(
-      `/satellite-map?lat=${center_lat}&lng=${center_lng}&level=2`,
+      `/satellite-map?lat=${center_lat}&lng=${center_lng}&level=1`,
       (tex) => {
         if (!groundRef.current) return;
         groundRef.current.material.map         = tex;
@@ -172,7 +172,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     // 좌표계: X=동(+)/서(-), Y=위(+), Z=남(+)/북(-)
     // 남향(azimuth=180°) → 회전 0°, SE향(135°) → +45°, SW향(225°) → -45°
     const buildingGroup = new THREE.Group();
-    buildingGroup.rotation.y = -(azimuthDeg - 180) * DEG;
+    buildingGroup.rotation.y = (azimuthDeg - 180) * DEG;
 
     const bldGeo  = new THREE.BoxGeometry(DX, bH, DZ);
     const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
@@ -285,8 +285,8 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
 
     // ── 패널 배치 (세계 좌표계 — 위경도 기반) ─────────────────────────
     const THICK    = 0.05;
-    const PANEL_PH = stats.panel_h_m || 2.094;
-    const panelGeo = new THREE.BoxGeometry(stats.panel_w_m || 1.134, THICK, PANEL_PH);
+    const PANEL_PH = stats.panel_h_m || 1.134;   // NS 단변(남북)
+    const panelGeo = new THREE.BoxGeometry(stats.panel_w_m || 2.094, THICK, PANEL_PH); // EW 장변(동서)
 
     // 남사면 — 파란색 (효율 높음)
     const matActive = new THREE.MeshPhongMaterial({
