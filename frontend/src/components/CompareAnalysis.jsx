@@ -1,251 +1,234 @@
-import { useState, useRef } from 'react'
-import AddressInput from './AddressInput'
-import ProgressBar from './ProgressBar'
-import ResultCards from './ResultCards'
+import { useState, useRef, useCallback } from 'react';
+import AddressInput from './AddressInput';
+import ProgressBar from './ProgressBar';
+import KakaoMap from './KakaoMap';
+import MonthlyChart from './MonthlyChart';
+import DownloadButtons from './DownloadButtons';
 
-const _proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = `${_proto}//${window.location.host}/ws/analyze`
-
-function emptyEntry() {
-  return { id: Date.now() + Math.random(), value: '', state: 'idle', progress: null, result: null, error: '' }
-}
+const WS_BASE = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws')
+  : `ws://${location.host}`;
 
 export default function CompareAnalysis() {
-  const [entries,   setEntries]   = useState([emptyEntry(), emptyEntry()])
-  const [activeTab, setActiveTab] = useState(0)
-  const [running,   setRunning]   = useState(false)
-  const wsRefs = useRef([])
+  const [addresses, setAddresses] = useState(['', '']);
+  const [status, setStatus] = useState('idle');
+  const [step, setStep] = useState(0);
+  const [message, setMessage] = useState('');
+  const [results, setResults] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [markers, setMarkers] = useState([]);
 
-  function updateEntry(idx, patch) {
-    setEntries(prev => prev.map((e, i) => i === idx ? { ...e, ...patch } : e))
-  }
+  const wsRef = useRef(null);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
-  function addEntry() {
-    if (entries.length >= 5) return
-    setEntries(prev => [...prev, emptyEntry()])
-  }
+  const addAddress = () => {
+    if (addresses.length < 4) setAddresses([...addresses, '']);
+  };
 
-  function removeEntry(idx) {
-    if (entries.length <= 2) return
-    setEntries(prev => prev.filter((_, i) => i !== idx))
-    if (activeTab >= entries.length - 1) setActiveTab(entries.length - 2)
-  }
+  const removeAddress = (i) => {
+    if (addresses.length > 2) {
+      setAddresses(addresses.filter((_, idx) => idx !== i));
+    }
+  };
 
-  async function startAll() {
-    const valid = entries.filter(e => e.value.trim())
-    if (valid.length < 2) return
+  const updateAddress = (i, val) => {
+    const next = [...addresses];
+    next[i] = val;
+    setAddresses(next);
+  };
 
-    setRunning(true)
-    const reset = entries.map(e => ({
-      ...e,
-      state:    e.value.trim() ? 'running' : 'idle',
-      result:   null,
-      error:    '',
-      progress: e.value.trim() ? { step: 0, total: 5, message: '대기 중…' } : null,
-    }))
-    setEntries(reset)
+  const startCompare = useCallback(() => {
+    const valid = addresses.filter((a) => a.trim());
+    if (valid.length < 2) return;
+    if (statusRef.current === 'loading') return;
 
-    const promises = reset.map((entry, idx) => {
-      if (!entry.value.trim()) return Promise.resolve()
-      return new Promise(resolve => {
-        const ws = new WebSocket(WS_URL)
-        wsRefs.current[idx] = ws
+    setStatus('loading');
+    setStep(0);
+    setMessage('비교 분석을 시작합니다...');
+    setResults(null);
+    setErrorMsg('');
 
-        ws.onopen = () => ws.send(JSON.stringify({ address: entry.value.trim() }))
+    const ws = new WebSocket(`${WS_BASE}/ws/compare`);
+    wsRef.current = ws;
 
-        ws.onmessage = (evt) => {
-          const msg = JSON.parse(evt.data)
-          if (msg.type === 'progress') {
-            updateEntry(idx, { progress: { step: msg.step, total: msg.total, message: msg.message } })
-          } else if (msg.type === 'result') {
-            updateEntry(idx, { state: 'done', result: msg.data, progress: null })
-            resolve()
-          } else if (msg.type === 'error') {
-            updateEntry(idx, { state: 'error', error: msg.message, progress: null })
-            resolve()
-          }
-        }
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ addresses: valid }));
+    };
 
-        ws.onerror = () => {
-          updateEntry(idx, { state: 'error', error: '서버 연결 실패', progress: null })
-          resolve()
-        }
-      })
-    })
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'progress') {
+        setStep(data.step ?? 0);
+        setMessage(data.message ?? '');
+        if (data.markers) setMarkers(data.markers);
+      } else if (data.type === 'result') {
+        setResults(data.results);
+        setStatus('done');
+        setStep(5);
+      } else if (data.type === 'error') {
+        setErrorMsg(data.message || '오류가 발생했습니다.');
+        setStatus('error');
+      }
+    };
 
-    await Promise.all(promises)
-    setRunning(false)
-  }
-
-  const doneEntries = entries.filter(e => e.state === 'done' && e.result)
+    ws.onerror = () => { setErrorMsg('서버 연결 실패'); setStatus('error'); };
+    ws.onclose = () => {
+      if (statusRef.current === 'loading') {
+        setErrorMsg('연결이 끊어졌습니다.'); setStatus('error');
+      }
+    };
+  }, [addresses]);
 
   return (
-    <div className="compare-wrapper">
-      <div className="card section-panel">
-        <p className="section-title">건물 주소 목록 (2~5개)</p>
-        <div className="compare-input-list">
-          {entries.map((entry, idx) => (
-            <div key={entry.id} className="compare-addr-row">
-              <span className="compare-num">{idx + 1}</span>
-              <AddressInput
-                value={entry.value}
-                onChange={v => updateEntry(idx, { value: v })}
-                onSubmit={startAll}
-                disabled={running}
-                placeholder={`건물 ${idx + 1} 주소 입력`}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* 주소 입력 */}
+      <div className="input-panel">
+        <div className="input-panel-title">
+          ⚖️ 복수 건물 비교 분석
+          <span className="badge badge-orange" style={{ marginLeft: 'auto' }}>
+            최대 4개 건물
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {addresses.map((addr, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div
+                style={{
+                  width: 26, height: 26, borderRadius: '50%',
+                  background: i === 0 ? 'var(--blue)' : 'var(--orange)',
+                  color: 'white', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0,
+                }}
+              >
+                {i + 1}
+              </div>
+              <input
+                className="input-field"
+                style={{ flex: 1 }}
+                value={addr}
+                onChange={(e) => updateAddress(i, e.target.value)}
+                placeholder={`건물 ${i + 1} 주소`}
+                disabled={status === 'loading'}
               />
-              {entry.state === 'running' && <span className="status-dot running" />}
-              {entry.state === 'done'    && <span className="status-dot done"    />}
-              {entry.state === 'error'   && <span className="status-dot error"   />}
-              {entries.length > 2 && (
+              {addresses.length > 2 && (
                 <button
-                  className="remove-btn"
-                  onClick={() => removeEntry(idx)}
-                  disabled={running}
-                  title="제거"
+                  className="btn btn-sm"
+                  style={{ background: '#fed7d7', color: '#c53030', border: 'none' }}
+                  onClick={() => removeAddress(i)}
+                  disabled={status === 'loading'}
                 >
-                  ×
+                  ✕
                 </button>
               )}
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-          {entries.length < 5 && (
-            <button className="add-addr-btn" onClick={addEntry} disabled={running}>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          {addresses.length < 4 && (
+            <button className="btn btn-outline btn-sm" onClick={addAddress} disabled={status === 'loading'}>
               + 건물 추가
             </button>
           )}
           <button
-            className="analyze-btn"
-            onClick={startAll}
-            disabled={running || entries.filter(e => e.value.trim()).length < 2}
+            className="btn btn-primary"
+            style={{ marginLeft: 'auto' }}
+            onClick={startCompare}
+            disabled={
+              status === 'loading' ||
+              addresses.filter((a) => a.trim()).length < 2
+            }
           >
-            {running
-              ? <><span className="spinner" />분석 중…</>
-              : '전체 비교 분석'}
+            {status === 'loading' ? (
+              <><span className="spinner" /> 비교 중...</>
+            ) : (
+              '🔍 비교 분석 시작'
+            )}
           </button>
         </div>
       </div>
 
-      {entries.some(e => e.state === 'running') && (
-        <div className="compare-progress-list">
-          {entries.map((entry, idx) =>
-            entry.state === 'running' && entry.progress ? (
-              <div key={entry.id}>
-                <p className="compare-progress-label">
-                  건물 {idx + 1}: {entry.value.slice(0, 30)}{entry.value.length > 30 ? '…' : ''}
-                </p>
-                <ProgressBar
-                  step={entry.progress.step}
-                  total={entry.progress.total}
-                  message={entry.progress.message}
-                />
-              </div>
-            ) : null
-          )}
+      {/* 지도 */}
+      <KakaoMap markers={markers} height={280} />
+
+      {/* 프로그레스 */}
+      {status === 'loading' && <ProgressBar step={step} message={message} />}
+
+      {/* 에러 */}
+      {status === 'error' && (
+        <div style={{
+          background: '#fff5f5', border: '1px solid #fed7d7',
+          borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+          color: '#c53030', fontSize: 14,
+        }}>
+          ❌ {errorMsg}
         </div>
       )}
 
-      {entries.some(e => e.state === 'error') && (
-        <div className="compare-errors">
-          {entries.map((entry, idx) =>
-            entry.state === 'error' ? (
-              <div key={entry.id} className="error-box">
-                <strong>건물 {idx + 1} 오류</strong>{entry.error}
-              </div>
-            ) : null
-          )}
-        </div>
-      )}
-
-      {doneEntries.length >= 2 && <CompareTable entries={doneEntries} />}
-
-      {doneEntries.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="compare-result-tabs">
-            {entries.map((entry, idx) =>
-              entry.state === 'done' ? (
-                <button
-                  key={entry.id}
-                  className={`compare-tab-btn ${activeTab === idx ? 'active' : ''}`}
-                  onClick={() => setActiveTab(idx)}
-                >
-                  건물 {idx + 1}
-                </button>
-              ) : null
-            )}
+      {/* 결과 비교 */}
+      {status === 'done' && results && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{
+            background: 'var(--green-light)', border: '1px solid rgba(46,204,113,0.3)',
+            borderRadius: 'var(--radius-sm)', padding: '12px 20px',
+            color: '#276749', fontSize: 14,
+          }}>
+            ✅ 비교 분석이 완료되었습니다. ({results.length}개 건물)
           </div>
-          {entries[activeTab]?.state === 'done' && entries[activeTab]?.result && (
-            <ResultCards
-              summary={entries[activeTab].result.summary}
-              htmlPath={entries[activeTab].result.html_path}
-              pdfPath={entries[activeTab].result.pdf_path}
-            />
-          )}
-        </div>
-      )}
 
-      {!running && doneEntries.length === 0 && entries.every(e => e.state === 'idle') && (
-        <div className="empty-state">
-          <div className="empty-icon">🏘️</div>
-          <p>2개 이상의 건물 주소를 입력하고 비교 분석을 시작하세요</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CompareTable({ entries }) {
-  const rows = [
-    { label: '시스템 용량 (kW)',   get: s => s?.['태양광시스템']?.['총용량_kW'],          fmt: v => v?.toFixed(1),        best: 'max' },
-    { label: '연간 발전량 (kWh)',  get: s => s?.['태양광시스템']?.['연간발전량_kWh'],      fmt: v => v?.toLocaleString(),  best: 'max' },
-    { label: '설치비 (만원)',      get: s => s?.['경제성']?.['예상설치비_만원'],            fmt: v => v?.toLocaleString(),  best: 'min' },
-    { label: '회수기간 (년)',      get: s => s?.['경제성']?.['단순회수기간_년'],            fmt: v => v?.toFixed(1),        best: 'min' },
-    { label: 'CO₂ 저감 (kg/년)', get: s => s?.['경제성']?.['연간CO2저감_kg'],             fmt: v => v?.toLocaleString(),  best: 'max' },
-  ]
-
-  return (
-    <div className="compare-table-card">
-      <div className="compare-table-header">비교 요약</div>
-      <div className="compare-table-wrap">
-        <table className="compare-table">
-          <thead>
-            <tr>
-              <th>항목</th>
-              {entries.map((e, i) => (
-                <th key={i}>
-                  건물 {entries.indexOf(e) + 1}
-                  <br />
-                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-3)' }}>
-                    {(e.result?.summary?.['주소'] || '').slice(0, 18)}…
+          {/* 건물별 결과 그리드 */}
+          <div className="compare-grid">
+            {results.map((r, i) => (
+              <div key={i} className="card" style={{
+                borderTop: `3px solid ${i === 0 ? 'var(--blue)' : 'var(--orange)'}`,
+              }}>
+                <div className="section-header">
+                  <div
+                    className="section-title-dot"
+                    style={{ background: i === 0 ? 'var(--blue)' : 'var(--orange)' }}
+                  />
+                  <span className="section-title">
+                    건물 {i + 1}: {r.building?.name || r.address}
                   </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => {
-              const vals    = entries.map(e => row.get(e.result?.summary))
-              const numVals = vals.filter(v => v != null)
-              const bestVal = numVals.length > 0
-                ? (row.best === 'max' ? Math.max(...numVals) : Math.min(...numVals))
-                : null
-              return (
-                <tr key={row.label}>
-                  <td style={{ color: 'var(--text-2)', fontWeight: 500 }}>{row.label}</td>
-                  {vals.map((v, i) => (
-                    <td key={i} className={v != null && v === bestVal ? 'best' : ''}>
-                      {v != null ? row.fmt(v) : '—'}
-                      {v != null && v === bestVal ? ' ★' : ''}
-                    </td>
+                </div>
+
+                {/* KPI 요약 */}
+                <div style={{ padding: '12px 24px', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '설치 용량', val: `${r.system?.totalKw ?? '-'} kW` },
+                    { label: '연간 발전', val: `${r.system?.yearlyTotal?.toLocaleString() ?? '-'} kWh` },
+                    { label: '회수 기간', val: `${r.financial?.paybackYear ?? '-'}년` },
+                  ].map((k, j) => (
+                    <div key={j} style={{
+                      flex: 1, minWidth: 90,
+                      background: 'var(--bg)', borderRadius: 8,
+                      padding: '10px 12px',
+                    }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                        {k.label}
+                      </div>
+                      <div style={{
+                        fontSize: 16, fontWeight: 700,
+                        color: i === 0 ? 'var(--blue)' : 'var(--orange)',
+                      }}>
+                        {k.val}
+                      </div>
+                    </div>
                   ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                </div>
+
+                {/* 차트 */}
+                <MonthlyChart data={r.monthly_data || []} />
+
+                {/* 다운로드 */}
+                <DownloadButtons reportUrl={r.report_url} pdfUrl={r.pdf_url} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }

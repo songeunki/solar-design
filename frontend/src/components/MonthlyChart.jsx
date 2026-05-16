@@ -1,122 +1,140 @@
-const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
+/**
+ * MonthlyChart
+ * props:
+ *   data - Array(12) of { month, kwh, irradiation }
+ *          irradiation: 일사량 (kWh/m²)
+ *          kwh: 발전량 (kWh)
+ */
 
-export default function MonthlyChart({ values }) {
-  if (!values || values.length !== 12) return null
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
-  const W = 640, H = 210
-  const pl = 48, pr = 16, pt = 24, pb = 40
-  const cw = W - pl - pr
-  const ch = H - pt - pb
+export default function MonthlyChart({ data = [] }) {
+  if (!data || data.length === 0) return null;
 
-  const maxV    = Math.max(...values) || 1
-  const barSlot = cw / 12
-  const bw      = barSlot * 0.58
-  const gap     = (barSlot - bw) / 2
+  const W = 620, H = 240;
+  const PAD = { top: 20, right: 20, bottom: 36, left: 56 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
 
-  const gridLines = [0.25, 0.5, 0.75, 1.0]
+  const maxKwh = Math.max(...data.map((d) => d.kwh || 0), 1);
+  const maxIrr = Math.max(...data.map((d) => d.irradiation || 0), 1);
 
-  // Blue line: connect bar center tops
-  const linePoints = values.map((v, i) => {
-    const cx = pl + i * barSlot + barSlot / 2
-    const y  = pt + ch - (v / maxV) * ch
-    return `${cx.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
+  const barW = (chartW / 12) * 0.55;
+  const barGap = chartW / 12;
+
+  // 꺾은선 포인트
+  const linePoints = data.map((d, i) => {
+    const x = PAD.left + i * barGap + barGap / 2;
+    const y = PAD.top + chartH - (d.irradiation / maxIrr) * chartH;
+    return `${x},${y}`;
+  });
+  const polyline = linePoints.join(' ');
+
+  // y축 눈금
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((r) => ({
+    val: Math.round(maxKwh * r),
+    y: PAD.top + chartH - r * chartH,
+  }));
 
   return (
-    <div className="chart-card">
-      <div className="chart-header">
-        <span className="chart-title">월별 예상 발전량 (kWh)</span>
-        <div className="chart-legend">
-          <span className="legend-item">
-            <span className="legend-bar" />발전량
-          </span>
-          <span className="legend-item">
-            <span className="legend-line" />추세선
-          </span>
+    <div className="chart-wrapper">
+      {/* 범례 */}
+      <div className="chart-legend">
+        <div className="legend-item">
+          <div className="legend-dot" style={{ background: 'var(--orange)' }} />
+          월별 발전량 (kWh)
+        </div>
+        <div className="legend-item">
+          <div className="legend-dot" style={{ background: 'var(--blue)', borderRadius: '50%' }} />
+          일사량 (kWh/m²)
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-        <defs>
-          <linearGradient id="barOrange" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FF8050" />
-            <stop offset="100%" stopColor="#E85520" />
-          </linearGradient>
-        </defs>
+      {/* SVG */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: 'auto', overflow: 'visible' }}
+        aria-label="월별 발전량 차트"
+      >
+        {/* 그리드 */}
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line
+              x1={PAD.left} y1={t.y} x2={PAD.left + chartW} y2={t.y}
+              stroke="#e2e8f0" strokeWidth="1"
+            />
+            <text
+              x={PAD.left - 8} y={t.y + 4}
+              textAnchor="end" fontSize="11" fill="#a0aec0"
+            >
+              {t.val.toLocaleString()}
+            </text>
+          </g>
+        ))}
 
-        {/* Grid lines */}
-        {gridLines.map(pct => {
-          const y = pt + ch * (1 - pct)
-          return (
-            <g key={pct}>
-              <line
-                x1={pl} y1={y} x2={W - pr} y2={y}
-                stroke="rgba(0,0,0,0.06)" strokeWidth="1"
-                strokeDasharray={pct < 1 ? '4 3' : 'none'}
-              />
-              <text
-                x={pl - 6} y={y + 4} textAnchor="end"
-                fontSize="9.5" fill="#9AA5B4"
-                fontFamily="'Noto Sans KR', sans-serif"
-              >
-                {Math.round(maxV * pct)}
-              </text>
-            </g>
-          )
-        })}
-
-        {/* Orange bars */}
-        {values.map((v, i) => {
-          const bh = (v / maxV) * ch
-          const x  = pl + i * barSlot + gap
-          const y  = pt + ch - bh
-          const cx = pl + i * barSlot + barSlot / 2
+        {/* 막대 (발전량 - 오렌지) */}
+        {data.map((d, i) => {
+          const bH = ((d.kwh || 0) / maxKwh) * chartH;
+          const x = PAD.left + i * barGap + (barGap - barW) / 2;
+          const y = PAD.top + chartH - bH;
           return (
             <g key={i}>
               <rect
-                x={x} y={y} width={bw} height={bh}
-                fill="url(#barOrange)" rx="3" ry="3" opacity="0.88"
+                x={x} y={y} width={barW} height={bH}
+                fill="var(--orange)" rx="3" opacity="0.9"
               />
-              <text
-                x={cx} y={H - 10} textAnchor="middle"
-                fontSize="9.5" fill="#9AA5B4"
-                fontFamily="'Noto Sans KR', sans-serif"
-              >
-                {MONTHS[i]}
-              </text>
+              {d.kwh > 0 && (
+                <text
+                  x={x + barW / 2} y={y - 4}
+                  textAnchor="middle" fontSize="10" fill="var(--orange)"
+                  fontWeight="600"
+                >
+                  {d.kwh.toLocaleString()}
+                </text>
+              )}
             </g>
-          )
+          );
         })}
 
-        {/* Blue trend line */}
+        {/* 꺾은선 (일사량 - 파랑) */}
         <polyline
-          points={linePoints}
+          points={polyline}
           fill="none"
-          stroke="#1E6FD9"
+          stroke="var(--blue)"
           strokeWidth="2.5"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
-
-        {/* Dots on line */}
-        {values.map((v, i) => {
-          const cx = pl + i * barSlot + barSlot / 2
-          const y  = pt + ch - (v / maxV) * ch
+        {data.map((d, i) => {
+          const x = PAD.left + i * barGap + barGap / 2;
+          const y = PAD.top + chartH - (d.irradiation / maxIrr) * chartH;
           return (
             <circle
-              key={i}
-              cx={cx.toFixed(1)} cy={y.toFixed(1)} r="3.8"
-              fill="#fff" stroke="#1E6FD9" strokeWidth="2.2"
+              key={i} cx={x} cy={y} r="4"
+              fill="white" stroke="var(--blue)" strokeWidth="2.5"
             />
-          )
+          );
         })}
 
-        {/* Y axis line */}
+        {/* x축 레이블 */}
+        {MONTHS.map((m, i) => (
+          <text
+            key={i}
+            x={PAD.left + i * barGap + barGap / 2}
+            y={H - 8}
+            textAnchor="middle" fontSize="11" fill="#718096"
+          >
+            {m}
+          </text>
+        ))}
+
+        {/* x축 선 */}
         <line
-          x1={pl} y1={pt} x2={pl} y2={pt + ch}
-          stroke="rgba(0,0,0,0.08)" strokeWidth="1"
+          x1={PAD.left} y1={PAD.top + chartH}
+          x2={PAD.left + chartW} y2={PAD.top + chartH}
+          stroke="#e2e8f0" strokeWidth="1.5"
         />
       </svg>
     </div>
-  )
+  );
 }
