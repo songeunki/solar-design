@@ -5,6 +5,8 @@ from typing import Callable
 # (step, total, message)
 ProgressCb = Callable[[int, int, str], None]
 
+_MONTHS_KR = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"]
+
 
 def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     """단일 주소 전체 파이프라인 실행. 동기 함수 (ThreadPoolExecutor로 호출)."""
@@ -40,12 +42,50 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         lat=location.lat, lng=location.lng,
     )
 
+    # 경제성 (report_generator와 동일한 계산값 재사용)
+    ec             = report.summary.get("경제성", {})
+    install_cost   = ec.get("예상설치비_만원", 0) * 10_000      # 원
+    yearly_revenue = round(ec.get("연간절감액_만원", 0) * 10_000)  # 원/년
+    payback_year   = ec.get("단순회수기간_년", 0)
+    net_profit_20y = round(yearly_revenue * 20 - install_cost)
+
     return {
+        # 보고서 원본
         "summary":   report.summary,
         "html_path": report.file_path,
         "pdf_path":  report.pdf_path,
         "lat":       location.lat,
         "lng":       location.lng,
+        # ResultCards용 구조화 필드
+        "building": {
+            "address":  address,
+            "floor":    building.floors,
+            "area":     building.extra.get("total_floor_area_m2") or building.roof_area_m2,
+            "roofType": building.roof_type,
+        },
+        "system": {
+            "panelCount":  electrical.panel_count,
+            "totalKw":     electrical.total_capacity_kw,
+            "inverterKw":  electrical.inverter_capacity_kw,
+            "monthlyAvg":  round(electrical.annual_generation_kwh / 12),
+            "yearlyTotal": electrical.annual_generation_kwh,
+        },
+        "financial": {
+            "installCost":   install_cost,
+            "yearlyRevenue": yearly_revenue,
+            "paybackYear":   payback_year,
+            "netProfit20y":  net_profit_20y,
+        },
+        "monthly_data": [
+            {
+                "month":       _MONTHS_KR[i],
+                "kwh":         electrical.monthly_generation_kwh[i],
+                "irradiation": weather.monthly_irradiance[i],
+            }
+            for i in range(12)
+        ],
+        "report_url": report.file_path,
+        "pdf_url":    report.pdf_path,
     }
 
 
