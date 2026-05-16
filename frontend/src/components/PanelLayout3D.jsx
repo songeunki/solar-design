@@ -158,104 +158,122 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     grid.material.transparent = true;
     scene.add(grid);
 
-    // ── 건물 본체 ──────────────────────────────────────────────────────
+    // ── 건물 본체 + 지붕을 하나의 그룹으로: azimuth_deg만큼 Y축 회전 ────
+    // 좌표계: X=동(+)/서(-), Y=위(+), Z=남(+)/북(-)
+    // 남향(azimuth=180°) → 회전 0°, SE향(135°) → +45°, SW향(225°) → -45°
+    const buildingGroup = new THREE.Group();
+    buildingGroup.rotation.y = -(azimuthDeg - 180) * DEG;
+
     const bldGeo  = new THREE.BoxGeometry(DX, bH, DZ);
     const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
     const bldMesh = new THREE.Mesh(bldGeo, bldMat);
-    bldMesh.position.y  = bH / 2;
-    bldMesh.castShadow  = true;
+    bldMesh.position.y    = bH / 2;
+    bldMesh.castShadow    = true;
     bldMesh.receiveShadow = true;
-    scene.add(bldMesh);
+    buildingGroup.add(bldMesh);
 
-    // 건물 엣지
     const edgesGeo = new THREE.EdgesGeometry(bldGeo);
     const edgeMat  = new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.4 });
     const edgeLine = new THREE.LineSegments(edgesGeo, edgeMat);
     edgeLine.position.y = bH / 2;
-    scene.add(edgeLine);
+    buildingGroup.add(edgeLine);
 
-    // ── 지붕 형상 (roofShape 별 렌더링) ─────────────────────────────
-    const roofGroup = new THREE.Group();
-    roofGroup.rotation.y = -(azimuthDeg - 180) * DEG;
-
-    const _mat  = (hex) => new THREE.MeshLambertMaterial({ color: hex, side: THREE.DoubleSide });
+    // ── 지붕 형상 ─────────────────────────────────────────────────────
+    // 공용 헬퍼: 평면 배열 → BufferGeometry
+    const _mat   = (hex) => new THREE.MeshLambertMaterial({ color: hex, side: THREE.DoubleSide });
     const _mkGeo = (verts, idx) => {
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+      g.setIndex(new THREE.BufferAttribute(new Uint16Array(idx), 1));
       g.computeVertexNormals();
       return g;
     };
 
     if (roofShape === 'flat') {
       // 평지붕: DX(동서) × DZ(남북) 수평면
-      const g = new THREE.PlaneGeometry(DX, DZ);
-      const m = new THREE.Mesh(g, _mat(0x8899aa));
-      m.rotation.x    = -Math.PI / 2;
-      m.position.y    = bH;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(DX, DZ), _mat(0x8899aa));
+      m.rotation.x = -Math.PI / 2;
+      m.position.y = bH;
       m.receiveShadow = true;
-      roofGroup.add(m);
+      buildingGroup.add(m);
 
     } else if (roofShape === 'gable') {
-      // 박공지붕(ㅅ): 용마루가 동서(DX) 방향으로 놓임, 남북(DZ) 방향으로 경사
-      // 남면: 남쪽 처마(Z=+DZ/2,Y=bH) → 용마루(Z=0,Y=bH+rise)
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
-        -DX/2, bH,      +DZ/2,   +DX/2, bH,      +DZ/2,
-        +DX/2, bH+rise,  0,      -DX/2, bH+rise,  0,
-      ]), new Uint16Array([0,1,2, 0,2,3])), _mat(0x8899aa)));
-      // 북면: 용마루(Z=0,Y=bH+rise) → 북쪽 처마(Z=-DZ/2,Y=bH)
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
-        -DX/2, bH+rise,  0,      +DX/2, bH+rise,  0,
-        +DX/2, bH,      -DZ/2,   -DX/2, bH,      -DZ/2,
-      ]), new Uint16Array([0,1,2, 0,2,3])), _mat(0x7a8b9c)));
-      // 동·서 박공 삼각형 (X=±DX/2, Z: -DZ/2~+DZ/2, 꼭짓점 Y=bH+rise)
-      [-DX/2, +DX/2].forEach(ex => {
-        roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
-          ex, bH, +DZ/2,   ex, bH, -DZ/2,   ex, bH+rise, 0,
-        ]), new Uint16Array([0,1,2])), _mat(0x8899aa)));
-      });
-      // 용마루 선 (동서 방향)
-      roofGroup.add(new THREE.Line(
+      // 박공지붕(ㅅ자): 용마루가 동서(X) 방향, 남북(Z)으로 경사
+      //   용마루:  (-DX/2, bH+rise, 0) ~ (+DX/2, bH+rise, 0)
+      //   남쪽 처마: Z=+DZ/2, Y=bH   북쪽 처마: Z=-DZ/2, Y=bH
+      //
+      //       용마루(bH+rise)
+      //      /     E-W      \
+      //     /  [남사면,ㅅ]   \
+      //    /                  \
+      // 남쪽처마(bH)       북쪽처마(bH)
+
+      // 남사면 사각형: SW처마→SE처마→NE용마루→NW용마루
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
+        -DX/2, bH,       +DZ/2,   // V0 SW처마
+        +DX/2, bH,       +DZ/2,   // V1 SE처마
+        +DX/2, bH+rise,   0,      // V2 NE용마루
+        -DX/2, bH+rise,   0,      // V3 NW용마루
+      ], [0,1,2, 0,2,3]), _mat(0x8a9bac)));
+
+      // 북사면 사각형: NW용마루→NE용마루→SE처마→SW처마
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
+        -DX/2, bH+rise,   0,      // V0 NW용마루
+        +DX/2, bH+rise,   0,      // V1 NE용마루
+        +DX/2, bH,       -DZ/2,   // V2 SE처마
+        -DX/2, bH,       -DZ/2,   // V3 SW처마
+      ], [0,1,2, 0,2,3]), _mat(0x6e7f90)));
+
+      // 동측 박공 삼각형 (X=+DX/2): SE처마→NE처마→E용마루꼭짓점
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
+        +DX/2, bH,       +DZ/2,   // SE처마
+        +DX/2, bH,       -DZ/2,   // NE처마
+        +DX/2, bH+rise,   0,      // E용마루꼭짓점
+      ], [0,1,2]), _mat(0x7b8c9d)));
+
+      // 서측 박공 삼각형 (X=-DX/2): SW처마→W용마루꼭짓점→NW처마
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
+        -DX/2, bH,       +DZ/2,   // SW처마
+        -DX/2, bH+rise,   0,      // W용마루꼭짓점
+        -DX/2, bH,       -DZ/2,   // NW처마
+      ], [0,1,2]), _mat(0x7b8c9d)));
+
+      // 용마루 강조선 (동서 방향)
+      buildingGroup.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(-DX/2, bH+rise, 0),
           new THREE.Vector3(+DX/2, bH+rise, 0),
         ]),
-        new THREE.LineBasicMaterial({ color: 0x556677 })
+        new THREE.LineBasicMaterial({ color: 0x3a4a5a, linewidth: 2 })
       ));
 
     } else if (roofShape === 'hip') {
-      // 팔작지붕: 용마루(동서) + 4면 경사
-      const rl = DX / 4;  // 용마루 반길이 (동서)
+      // 팔작지붕: 동서 방향 용마루(길이 DX/2) + 4면 경사
+      const rl = DX / 4;
       const py = bH + rise;
-      // 남면 사다리꼴
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
         -DX/2, bH, +DZ/2,  +DX/2, bH, +DZ/2,  +rl, py, 0,  -rl, py, 0,
-      ]), new Uint16Array([0,1,2, 0,2,3])), _mat(0x8899aa)));
-      // 북면 사다리꼴
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
+      ], [0,1,2, 0,2,3]), _mat(0x8a9bac)));
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
         -rl, py, 0,  +rl, py, 0,  +DX/2, bH, -DZ/2,  -DX/2, bH, -DZ/2,
-      ]), new Uint16Array([0,1,2, 0,2,3])), _mat(0x7a8b9c)));
-      // 동면 삼각형
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
+      ], [0,1,2, 0,2,3]), _mat(0x6e7f90)));
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
         +DX/2, bH, +DZ/2,  +rl, py, 0,  +DX/2, bH, -DZ/2,
-      ]), new Uint16Array([0,1,2])), _mat(0x8899aa)));
-      // 서면 삼각형
-      roofGroup.add(new THREE.Mesh(_mkGeo(new Float32Array([
+      ], [0,1,2]), _mat(0x7b8c9d)));
+      buildingGroup.add(new THREE.Mesh(_mkGeo([
         -DX/2, bH, +DZ/2,  -DX/2, bH, -DZ/2,  -rl, py, 0,
-      ]), new Uint16Array([0,1,2])), _mat(0x8899aa)));
-      // 용마루 선
-      roofGroup.add(new THREE.Line(
+      ], [0,1,2]), _mat(0x7b8c9d)));
+      buildingGroup.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(-rl, py, 0),
-          new THREE.Vector3(+rl, py, 0),
+          new THREE.Vector3(-rl, py, 0), new THREE.Vector3(+rl, py, 0),
         ]),
-        new THREE.LineBasicMaterial({ color: 0x556677 })
+        new THREE.LineBasicMaterial({ color: 0x3a4a5a })
       ));
     }
 
-    scene.add(roofGroup);
+    scene.add(buildingGroup);
 
-    // ── 패널 배치 ─────────────────────────────────────────────────────
+    // ── 패널 배치 (세계 좌표계 — 위경도 기반) ─────────────────────────
     const THICK    = 0.05;
     const PANEL_PH = stats.panel_h_m || 2.094;
     const panelGeo = new THREE.BoxGeometry(stats.panel_w_m || 1.134, THICK, PANEL_PH);
@@ -269,26 +287,30 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     });
 
     panels.forEach((p) => {
-      // buffer 패널은 표시하지 않음 (target_panel_count 초과분)
       if (p.status === 'buffer') return;
 
       const dx = (p.lng + pw_deg / 2 - center_lng) * mPerDegLng;
+      // lat가 클수록(북쪽) dz가 음수 → Z+=남(+), Z-=북(-)
       const dz = -((p.lat + ph_deg / 2 - center_lat) * M_PER_DEG_LAT);
+
+      // 박공/팔작: 남사면(dz≥0)에만 패널 — 북사면은 표시 안 함
+      if ((roofShape === 'gable' || roofShape === 'hip') && dz < 0) return;
 
       let panelY;
       if (roofShape === 'flat') {
-        // 평지붕: 패널 남쪽 하단이 지붕면(bH)에 닿도록 Y 오프셋
+        // 평지붕: 패널 기저(남단 하면)이 bH에 닿도록 중심 Y 보정
+        // rotation.x=tiltRad → local Z+ 방향이 -Y(아래) 이동
         panelY = bH + (PANEL_PH / 2) * Math.sin(tiltRad) + THICK / 2;
       } else {
-        // 경사지붕(박공/팔작): 남사면 기준 — Z=0(용마루,최고), Z=+DZ/2(처마,bH)
-        const dzClamped = Math.min(Math.abs(dz), DZ / 2);
+        // 경사지붕 남사면: dz=0(용마루, Y=bH+rise) ~ dz=DZ/2(처마, Y=bH)
+        const dzClamped = Math.max(0, Math.min(dz, DZ / 2));
         panelY = bH + rise * (1 - dzClamped / (DZ / 2)) + THICK / 2;
       }
 
       const mat  = p.status === 'shade' ? matShade : matActive;
       const mesh = new THREE.Mesh(panelGeo, mat);
       mesh.position.set(dx, panelY, dz);
-      mesh.rotation.x    = tiltRad;
+      mesh.rotation.x    = tiltRad;   // 경사면과 같은 각도로 기울임
       mesh.castShadow    = true;
       mesh.receiveShadow = true;
       scene.add(mesh);

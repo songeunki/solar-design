@@ -250,8 +250,10 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     elif any(k in roof_cd for k in ("슬라브", "콘크리트", "평")):
         roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
     else:
-        # roofCdNm 식별 불가 → 구조·용도 보조 추정
-        if any(k in structure_cd for k in ("목조", "조적")) and purpose in ("단독주택", "다가구주택"):
+        # roofCdNm 식별 불가 → 용도·구조로 보조 추정
+        # 단독/다가구/연립주택은 경사지붕 가능성이 높음; 목조·조적 구조도 동일
+        _RESIDENTIAL = ("단독주택", "다가구주택", "연립주택")
+        if purpose in _RESIDENTIAL or any(k in structure_cd for k in ("목조", "조적")):
             roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
         else:
             roof_type, slope, roof_shape = "평지붕", 0.0, "flat"

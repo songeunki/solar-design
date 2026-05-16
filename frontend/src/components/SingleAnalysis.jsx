@@ -56,6 +56,13 @@ export default function SingleAnalysis() {
         setStep(msg.step ?? 0);
         setMessage(msg.message ?? '');
       } else if (msg.type === 'result') {
+        // 디버그: 실제 전달 값 확인
+        console.log('[WS result] building:', msg.data?.building);
+        console.log('[WS result] panel_layout.stats:', msg.data?.panel_layout?.stats);
+        console.log('[WS result] roofShape:', msg.data?.building?.roofShape,
+          '| tilt_deg:', msg.data?.panel_layout?.stats?.tilt_deg,
+          '| azimuth_deg:', msg.data?.panel_layout?.stats?.azimuth_deg,
+          '| archArea:', msg.data?.building?.archArea);
         setResult(msg.data);
         if (msg.data?.lat && msg.data?.lng) {
           setMarkerPos({ lat: msg.data.lat, lng: msg.data.lng });
