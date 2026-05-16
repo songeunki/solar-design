@@ -221,6 +221,18 @@ class PanelLayoutEngine:
                     corners=corners,
                 ))
 
+        # ── [DEBUG] 핵심 값 출력 ─────────────────────────────────────────
+        print(f"[PL] center: {lat:.6f}, {lng:.6f}", flush=True)
+        print(f"[PL] building_ew_m(동서): {building_ew_m:.2f}, building_ns_m(남북): {building_ns_m:.2f}", flush=True)
+        print(f"[PL] azimuth_deg: {azimuth_deg}, rot_rad: {rot_rad:.4f}", flush=True)
+        if panels:
+            print("[PL] 첫번째 패널 corners:", flush=True)
+            for name, pt in zip(['SW', 'SE', 'NE', 'NW'], panels[0].corners):
+                print(f"  {name}: lat={pt['lat']:.6f}, lng={pt['lng']:.6f}", flush=True)
+        if len(panels) > 1 and panels[1].corners:
+            sw1 = panels[1].corners[0]
+            print(f"[PL] 두번째 패널 SW: lat={sw1['lat']:.6f}, lng={sw1['lng']:.6f}", flush=True)
+
         # ── [DEBUG] 방향 검증 ─────────────────────────────────────────────
         visible = [p for p in panels if p.status != "buffer"]
         if visible:
