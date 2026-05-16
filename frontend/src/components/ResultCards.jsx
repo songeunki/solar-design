@@ -86,9 +86,9 @@ export default function ResultCards({ result }) {
           </div>
 
           {/* 재무 분석 */}
-          <div className="card card-accent-orange">
+          <div className="card card-accent">
             <div className="section-header">
-              <div className="section-title-dot" style={{ background: 'var(--orange)' }} />
+              <div className="section-title-dot" />
               <span className="section-title">💸 재무 분석</span>
             </div>
             <div style={{ padding: '0 24px 16px' }}>

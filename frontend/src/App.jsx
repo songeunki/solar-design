@@ -13,7 +13,7 @@ export default function App() {
       <header className="app-header">
         <div className="header-logo">
           <div className="header-logo-icon">☀️</div>
-          태양광 설계 자동화
+          AI 태양광 입지 분석 자동화 프로그램
         </div>
         <span className="header-badge">Beta v1.0</span>
       </header>

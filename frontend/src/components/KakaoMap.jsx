@@ -17,7 +17,7 @@ export default function KakaoMap({
   const mapRef = useRef(null);
   const mapObjRef = useRef(null);
   const overlayRef = useRef(null);
-  const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'skyview'
+  const [mapType, setMapType] = useState('skyview'); // 'roadmap' | 'skyview'
 
   // 카카오맵 SDK 초기화
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function KakaoMap({
       const map = new kakao.maps.Map(mapRef.current, {
         center: defaultCenter,
         level: 4,
-        mapTypeId: kakao.maps.MapTypeId.ROADMAP,
+        mapTypeId: kakao.maps.MapTypeId.SKYVIEW,
       });
 
       mapObjRef.current = map;
@@ -120,6 +120,7 @@ export default function KakaoMap({
     overlayRef.current = overlay;
 
     map.panTo(pos);
+    map.setLevel(3);
   }, [markerPos]);
 
   // 중심 이동

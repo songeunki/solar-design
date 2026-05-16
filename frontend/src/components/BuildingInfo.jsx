@@ -31,9 +31,9 @@ export default function BuildingInfo({ building = {}, system = {} }) {
       </div>
 
       {/* 시스템 구성 */}
-      <div className="card card-accent-orange">
+      <div className="card card-accent">
         <div className="section-header">
-          <div className="section-title-dot" style={{ background: 'var(--orange)' }} />
+          <div className="section-title-dot" />
           <span className="section-title">⚡ 시스템 구성</span>
         </div>
         <div style={{ padding: '0 24px 8px' }}>

@@ -88,9 +88,6 @@ export default function SingleAnalysis() {
         <div className="input-panel">
           <div className="input-panel-title">
             🏠 단일 건물 태양광 분석
-            <span className="badge badge-blue" style={{ marginLeft: 'auto' }}>
-              640W 패널 기준
-            </span>
           </div>
           <AddressInput
             onSubmit={startAnalysis}
