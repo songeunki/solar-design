@@ -1,4 +1,5 @@
 import MonthlyChart from './MonthlyChart';
+import SolarAltitudeChart from './SolarAltitudeChart';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
 
@@ -83,6 +84,15 @@ export default function ResultCards({ result }) {
               </div>
             </div>
             <MonthlyChart data={monthly_data} />
+          </div>
+
+          {/* 태양 고도각 */}
+          <div className="card card-accent">
+            <div className="section-header">
+              <div className="section-title-dot" />
+              <span className="section-title">☀️ 월별 태양 고도각</span>
+            </div>
+            <SolarAltitudeChart data={monthly_data} />
           </div>
 
           {/* 재무 분석 */}

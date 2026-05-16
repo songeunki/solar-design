@@ -8,6 +8,14 @@ ProgressCb = Callable[[int, int, str], None]
 
 _MONTHS_KR = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"]
 
+# 월별 태양 적위 근사값 (1~12월, 도)
+_MONTHLY_DECLINATIONS = [-23.1, -17.3, -8.4, 2.2, 11.9, 20.0, 23.4, 20.4, 12.1, 1.8, -8.8, -18.8]
+
+
+def _calc_solar_altitude(lat: float) -> list[float]:
+    """위도로 월별 최대 태양 고도각 계산. 공식: 90 - |위도 - 적위|"""
+    return [round(90 - abs(lat - dec), 1) for dec in _MONTHLY_DECLINATIONS]
+
 
 def _to_url(path: str | None) -> str | None:
     """절대 파일 경로 → FastAPI /files 정적 서빙 URL로 변환."""
@@ -45,10 +53,13 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
     structural = StructuralDesigner().design(roof, electrical)
 
     p(5, "보고서 생성")
+    solar_altitude_deg = _calc_solar_altitude(location.lat)
+
     report = ReportGenerator().generate(
         address, building, roof, electrical, structural,
         lat=location.lat, lng=location.lng,
         monthly_irradiance=weather.monthly_irradiance,
+        solar_altitude_deg=solar_altitude_deg,
     )
 
     # 경제성 (report_generator와 동일한 계산값 재사용)
@@ -90,9 +101,10 @@ def run_pipeline(address: str, on_progress: ProgressCb | None = None) -> dict:
         },
         "monthly_data": [
             {
-                "month":       _MONTHS_KR[i],
-                "kwh":         electrical.monthly_generation_kwh[i],
-                "irradiation": weather.monthly_irradiance[i],
+                "month":          _MONTHS_KR[i],
+                "kwh":            electrical.monthly_generation_kwh[i],
+                "irradiation":    weather.monthly_irradiance[i],
+                "solar_altitude": solar_altitude_deg[i],
             }
             for i in range(12)
         ],

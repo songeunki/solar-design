@@ -60,6 +60,7 @@ class ReportGenerator:
         lat: float | None = None,
         lng: float | None = None,
         monthly_irradiance: list[float] | None = None,
+        solar_altitude_deg: list[float] | None = None,
     ) -> Report:
         _OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -68,6 +69,7 @@ class ReportGenerator:
         summary = _build_summary(
             address, ts, building, roof, electrical, structural,
             monthly_irradiance=monthly_irradiance,
+            solar_altitude_deg=solar_altitude_deg,
         )
         map_b64 = _fetch_static_map(lat, lng) if (lat and lng) else None
         html_str = _render_html(summary, map_b64)
@@ -181,6 +183,7 @@ def _build_summary(
     electrical: ElectricalDesign,
     structural: StructuralDesign,
     monthly_irradiance: list[float] | None = None,
+    solar_altitude_deg: list[float] | None = None,
 ) -> dict:
     economics = _calc_economics(electrical)
     notes = list(structural.structural_notes)
@@ -214,6 +217,7 @@ def _build_summary(
             "연간발전량_kWh": electrical.annual_generation_kwh,
             "월별발전량_kWh": electrical.monthly_generation_kwh,
             "월별일사량_kWh_m2": monthly_irradiance or [],
+            "월별태양고도각_deg": solar_altitude_deg or [],
             "인버터용량_kW": electrical.inverter_capacity_kw,
             "직병렬구성": electrical.string_config,
             "배선사양": electrical.wiring_spec,
@@ -295,6 +299,75 @@ def _monthly_chart(values: list[float], irradiance: list[float] | None = None) -
     return (
         f'<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block">'
         + "".join(grid) + "".join(bars) + line_svg + "</svg>"
+    )
+
+
+def _solar_altitude_chart(altitudes: list[float]) -> str:
+    """월별 최대 태양 고도각 SVG — 파란 꺾은선, 계절별 배경 밴드"""
+    W, H = 680, 210
+    PL, PR, PT, PB = 48, 16, 28, 40
+    cw = W - PL - PR
+    ch = H - PT - PB
+    max_alt = 90.0
+    slot = cw / 12
+
+    # 계절 배경 (start_idx, end_idx_exclusive, color)
+    season_bands = [
+        (0,  2,  "rgba(147,197,253,0.22)"),  # 겨울 (1-2월)
+        (2,  5,  "rgba(134,239,172,0.22)"),  # 봄   (3-5월)
+        (5,  8,  "rgba(253,186,116,0.22)"),  # 여름 (6-8월)
+        (8,  11, "rgba(252,211,77,0.22)"),   # 가을 (9-11월)
+        (11, 12, "rgba(147,197,253,0.22)"),  # 겨울 (12월)
+    ]
+    bands = []
+    for s, e, color in season_bands:
+        x = PL + s * slot
+        w = (e - s) * slot
+        bands.append(
+            f'<rect x="{x:.1f}" y="{PT}" width="{w:.1f}" height="{ch}"'
+            f' fill="{color}" rx="3"/>'
+        )
+
+    # Y축 눈금 (0°, 30°, 60°, 90°)
+    grid = []
+    for v in [0, 30, 60, 90]:
+        y = PT + ch - (v / max_alt) * ch
+        grid += [
+            f'<line x1="{PL}" y1="{y:.1f}" x2="{W-PR}" y2="{y:.1f}" stroke="#e2e8f0" stroke-width="1"/>',
+            f'<text x="{PL-6}" y="{y+4:.1f}" text-anchor="end" font-size="10" fill="#a0aec0">{v}°</text>',
+        ]
+
+    # 꺾은선 포인트
+    pts, value_labels, x_labels = [], [], []
+    for i, alt in enumerate(altitudes):
+        cx = PL + i * slot + slot / 2
+        cy = PT + ch - (alt / max_alt) * ch
+        pts.append(f"{cx:.1f},{cy:.1f}")
+        value_labels.append(
+            f'<text x="{cx:.1f}" y="{cy-8:.1f}" text-anchor="middle"'
+            f' font-size="9" fill="#1E6FD9" font-weight="700">{alt}°</text>'
+        )
+        x_labels.append(
+            f'<text x="{cx:.1f}" y="{PT+ch+18:.1f}" text-anchor="middle"'
+            f' font-size="10" fill="#718096">{_MONTHS[i]}</text>'
+        )
+
+    poly = (
+        f'<polyline points="{" ".join(pts)}" fill="none" stroke="#1E6FD9"'
+        f' stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    )
+    dots = "".join(
+        f'<circle cx="{p.split(",")[0]}" cy="{p.split(",")[1]}" r="3.5"'
+        f' fill="white" stroke="#1E6FD9" stroke-width="2.5"/>'
+        for p in pts
+    )
+    x_axis = f'<line x1="{PL}" y1="{PT+ch}" x2="{W-PR}" y2="{PT+ch}" stroke="#e2e8f0" stroke-width="1.5"/>'
+
+    return (
+        f'<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block">'
+        + "".join(bands) + "".join(grid)
+        + poly + dots + "".join(value_labels) + "".join(x_labels) + x_axis
+        + "</svg>"
     )
 
 
@@ -491,6 +564,35 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
         chart_legend + _monthly_chart(e["월별발전량_kWh"], irradiance=irr_data) + chart_note
     )
 
+    # ── 월별 태양 고도각 ──────────────────────────────────────────────────────
+    alt_data = e.get("월별태양고도각_deg") or []
+    alt_legend = (
+        '<div style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#4a5568">'
+        '<div style="width:10px;height:10px;border-radius:50%;background:#1E6FD9"></div>'
+        '월별 최대 태양 고도각 (°)</div>'
+        '<div style="display:flex;gap:14px;margin-left:auto">'
+        + "".join(
+            '<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#4a5568">'
+            f'<div style="width:8px;height:8px;border-radius:2px;background:{c}"></div>{lbl}</div>'
+            for lbl, c in [
+                ("봄",   "rgba(134,239,172,0.8)"),
+                ("여름", "rgba(253,186,116,0.8)"),
+                ("가을", "rgba(252,211,77,0.8)"),
+                ("겨울", "rgba(147,197,253,0.8)"),
+            ]
+        )
+        + '</div></div>'
+    )
+    alt_note = (
+        '<div style="font-size:11px;color:#a0aec0;text-align:right;margin-top:4px">'
+        '단위: ° (도) · 서울 위도 기준 최대 고도각</div>'
+    )
+    altitude_section = (
+        card("☀️ 월별 태양 고도각", alt_legend + _solar_altitude_chart(alt_data) + alt_note)
+        if alt_data else ""
+    )
+
     # ── 구조 설계 ─────────────────────────────────────────────────────────────
     anc = st["앙카사양"]
     str_left = (
@@ -596,6 +698,7 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
   {roof_section}
   {system_section}
   {chart_section}
+  {altitude_section}
   {structural_section}
   {economics_section}
   {notes_section}
