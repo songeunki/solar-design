@@ -242,21 +242,44 @@ def _parse_item(address: str, item: dict) -> BuildingInfo:
     structure_cd = (item.get("strctCdNm", "") or "").strip()
     arch_area    = float(item.get("archArea") or 0.0)
 
-    # 지붕 형상 결정: 경사/기와 지시자 먼저, flat 지시자 그 다음, 식별 불가시 구조·용도 보조
+    _RESIDENTIAL = ("단독주택", "다가구주택", "연립주택")
+    _is_residential = purpose in _RESIDENTIAL
+    _is_low_rise    = floors <= 3
+
+    # 지붕 형상 결정 — 판정 우선순위:
+    #  1) 명확한 경사 지시자 (기와·슬레이트·아스팔트 등)
+    #  2) 슬라브/콘크리트 → 고층·상업은 평지붕, 저층 주거는 경사지붕 가능
+    #  3) "평" 포함 → 무조건 평지붕
+    #  4) 식별 불가 → 용도·구조 보조
     if "기와" in roof_cd:
         roof_type, slope, roof_shape = "경사지붕", 30.0, "hip"
+
     elif any(k in roof_cd for k in ("경사", "슬레이트", "아스팔트", "금속", "징크")):
         roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
-    elif any(k in roof_cd for k in ("슬라브", "콘크리트", "평")):
-        roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
-    else:
-        # roofCdNm 식별 불가 → 용도·구조로 보조 추정
-        # 단독/다가구/연립주택은 경사지붕 가능성이 높음; 목조·조적 구조도 동일
-        _RESIDENTIAL = ("단독주택", "다가구주택", "연립주택")
-        if purpose in _RESIDENTIAL or any(k in structure_cd for k in ("목조", "조적")):
+
+    elif any(k in roof_cd for k in ("슬라브", "콘크리트")):
+        # 슬라브/콘크리트: 저층 주거는 대장 오기재 가능 → gable 허용
+        if _is_residential and _is_low_rise:
             roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
         else:
             roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
+
+    elif "평" in roof_cd:
+        roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
+
+    else:
+        # roofCdNm 식별 불가 → 용도·구조 보조
+        if _is_residential or any(k in structure_cd for k in ("목조", "조적")):
+            roof_type, slope, roof_shape = "경사지붕", 30.0, "gable"
+        else:
+            roof_type, slope, roof_shape = "평지붕", 0.0, "flat"
+
+    # 진단 로그 — Railway 서버 로그에서 실제 roofCdNm 확인 가능
+    warnings.warn(
+        f"[roofShape] roofCdNm='{roof_cd}' | purpose='{purpose}' | "
+        f"structure='{structure_cd}' | floors={floors} → {roof_shape}",
+        stacklevel=3,
+    )
 
     return BuildingInfo(
         address=address,

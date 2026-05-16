@@ -46,16 +46,23 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
 
   const tiltDeg    = stats.tilt_deg    ?? 30;
   const azimuthDeg = stats.azimuth_deg ?? 180;
-  // roof_shape: stats 우선, 없으면 building props, 없으면 flat 폴백
   const roofShape  = stats.roof_shape ?? building.roofShape ?? 'flat';
   const tiltRad    = tiltDeg * DEG;
   const mPerDegLng = M_PER_DEG_LAT * Math.cos(lat * DEG);
 
-  // 디버그: roofShape 전달 값 확인
-  console.log('[PanelLayout3D] roofShape:', roofShape,
+  // ── 폴백: roofShape='flat'이어도 tiltDeg>0이면 박공(gable)으로 렌더링 ──
+  // 건물대장 roofCdNm이 평지붕으로 오류 분류된 경우 경사 설치 각도로 보정
+  const effectiveRoofShape = (roofShape === 'flat' && tiltDeg > 0) ? 'gable' : roofShape;
+
+  // 디버그 — 브라우저 콘솔에서 실제 전달 값 확인
+  console.log('[PanelLayout3D]',
+    'roofShape(원본):', roofShape,
+    '→ effectiveRoofShape:', effectiveRoofShape,
+    '| tiltDeg:', tiltDeg,
+    '| azimuthDeg:', azimuthDeg,
     '| stats.roof_shape:', stats.roof_shape,
     '| building.roofShape:', building.roofShape,
-    '| tiltDeg:', tiltDeg);
+  );
 
   const bFloors     = building.floor    || 3;
   const bAreaM2     = building.area     || 200;
@@ -65,8 +72,8 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
   const DZ = stats.building_ns_m || Math.sqrt(archAreaM2 / 1.5);  // 남북 단변 (m)
   const Dmax = Math.max(DX, DZ);
   const bH  = bFloors * 3.0;
-  // rise: 박공/팔작 지붕의 남사면 고저차 (DZ/2 = 남사면 수평 폭)
-  const rise = (roofShape === 'flat') ? 0 : (DZ / 2) * Math.tan(tiltRad);
+  // rise: 박공/팔작 지붕의 남사면 고저차
+  const rise = (effectiveRoofShape === 'flat') ? 0 : (DZ / 2) * Math.tan(tiltRad);
 
   // ── 태양 위치 → 조명 업데이트 ──────────────────────────────────────────
   const updateSun = useCallback((mIdx, hour) => {
@@ -189,7 +196,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
       return g;
     };
 
-    if (roofShape === 'flat') {
+    if (effectiveRoofShape === 'flat') {
       // 평지붕: DX(동서) × DZ(남북) 수평면
       const m = new THREE.Mesh(new THREE.PlaneGeometry(DX, DZ), _mat(0x8899aa));
       m.rotation.x = -Math.PI / 2;
@@ -197,7 +204,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
       m.receiveShadow = true;
       buildingGroup.add(m);
 
-    } else if (roofShape === 'gable') {
+    } else if (effectiveRoofShape === 'gable') {
       // 박공지붕(ㅅ자): 용마루가 동서(X) 방향, 남북(Z)으로 경사
       //   용마루:  (-DX/2, bH+rise, 0) ~ (+DX/2, bH+rise, 0)
       //   남쪽 처마: Z=+DZ/2, Y=bH   북쪽 처마: Z=-DZ/2, Y=bH
@@ -247,7 +254,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
         new THREE.LineBasicMaterial({ color: 0x3a4a5a, linewidth: 2 })
       ));
 
-    } else if (roofShape === 'hip') {
+    } else if (effectiveRoofShape === 'hip') {
       // 팔작지붕: 동서 방향 용마루(길이 DX/2) + 4면 경사
       const rl = DX / 4;
       const py = bH + rise;
@@ -294,12 +301,11 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
       const dz = -((p.lat + ph_deg / 2 - center_lat) * M_PER_DEG_LAT);
 
       // 박공/팔작: 남사면(dz≥0)에만 패널 — 북사면은 표시 안 함
-      if ((roofShape === 'gable' || roofShape === 'hip') && dz < 0) return;
+      if ((effectiveRoofShape === 'gable' || effectiveRoofShape === 'hip') && dz < 0) return;
 
       let panelY;
-      if (roofShape === 'flat') {
+      if (effectiveRoofShape === 'flat') {
         // 평지붕: 패널 기저(남단 하면)이 bH에 닿도록 중심 Y 보정
-        // rotation.x=tiltRad → local Z+ 방향이 -Y(아래) 이동
         panelY = bH + (PANEL_PH / 2) * Math.sin(tiltRad) + THICK / 2;
       } else {
         // 경사지붕 남사면: dz=0(용마루, Y=bH+rise) ~ dz=DZ/2(처마, Y=bH)
