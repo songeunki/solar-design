@@ -22,13 +22,28 @@ export default function SingleAnalysis() {
   const startAnalysis = useCallback(({ address }) => {
     if (statusRef.current === 'loading') return;
 
+    // 이전 WebSocket이 살아있으면 닫기
+    if (wsRef.current && wsRef.current.readyState < 2) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+    }
+
     setStatus('loading');
     setStep(0);
-    setMessage('분석을 시작합니다...');
+    setMessage('연결 중…');
     setResult(null);
     setErrorMsg('');
 
-    // WebSocket 연결
+    // 분석 시작 즉시 Kakao 클라이언트 지오코딩으로 지도 이동
+    if (window.kakao?.maps?.services) {
+      const geocoder = new window.kakao.maps.services.Geocoder();
+      geocoder.addressSearch(address.trim(), (res, st) => {
+        if (st === window.kakao.maps.services.Status.OK && res[0]) {
+          setMarkerPos({ lat: parseFloat(res[0].y), lng: parseFloat(res[0].x) });
+        }
+      });
+    }
+
     const ws = new WebSocket(`${WS_BASE}/ws/analyze`);
     wsRef.current = ws;
 
@@ -37,21 +52,21 @@ export default function SingleAnalysis() {
     };
 
     ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
+      const msg = JSON.parse(e.data);
 
-      if (data.type === 'progress') {
-        setStep(data.step ?? 0);
-        setMessage(data.message ?? '');
-        if (data.lat && data.lng) {
-          setMarkerPos({ lat: data.lat, lng: data.lng, label: address });
+      if (msg.type === 'progress') {
+        setStep(msg.step ?? 0);
+        setMessage(msg.message ?? '');
+      } else if (msg.type === 'result') {
+        setResult(msg.data);
+        if (msg.data?.lat && msg.data?.lng) {
+          setMarkerPos({ lat: msg.data.lat, lng: msg.data.lng });
         }
-      } else if (data.type === 'result') {
-        setResult(data.result);
         setStatus('done');
         setStep(5);
         setMessage('분석 완료!');
-      } else if (data.type === 'error') {
-        setErrorMsg(data.message || '알 수 없는 오류가 발생했습니다.');
+      } else if (msg.type === 'error') {
+        setErrorMsg(msg.message || '알 수 없는 오류가 발생했습니다.');
         setStatus('error');
       }
     };
