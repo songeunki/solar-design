@@ -241,80 +241,49 @@ _MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월
 
 
 def _monthly_chart(values: list[float]) -> str:
-    """월별 발전량 SVG 막대 차트 생성"""
-    W, H = 660, 210
-    pl, pr, pt, pb = 46, 12, 24, 38   # padding: left, right, top, bottom
-    cw = W - pl - pr                   # chart width  602
-    ch = H - pt - pb                   # chart height 148
-
+    """월별 발전량 SVG — 오렌지 막대 + 파란 꺾은선"""
+    W, H = 680, 220
+    PL, PR, PT, PB = 52, 16, 24, 40
+    cw = W - PL - PR
+    ch = H - PT - PB
     max_v = max(values) if values else 1
-    bar_slot = cw / 12
-    bw = bar_slot * 0.68               # bar width
-    gap = (bar_slot - bw) / 2
+    slot = cw / 12
+    bw   = slot * 0.55
 
-    # Y축 눈금선 4개
-    grid_lines = []
+    grid, bars, pts = [], [], []
     for pct in [0.25, 0.5, 0.75, 1.0]:
-        y = pt + ch * (1 - pct)
-        label = f"{max_v * pct:.0f}"
-        grid_lines.append(
-            f'<line x1="{pl}" y1="{y:.1f}" x2="{W-pr}" y2="{y:.1f}" '
-            f'stroke="#eef1f8" stroke-width="1.2"/>'
-        )
-        grid_lines.append(
-            f'<text x="{pl-5}" y="{y+3.5:.1f}" text-anchor="end" '
-            f'font-size="9.5" fill="#a0aec0">{label}</text>'
-        )
+        y = PT + ch * (1 - pct)
+        grid += [
+            f'<line x1="{PL}" y1="{y:.1f}" x2="{W-PR}" y2="{y:.1f}" stroke="#e2e8f0" stroke-width="1"/>',
+            f'<text x="{PL-6}" y="{y+4:.1f}" text-anchor="end" font-size="10" fill="#a0aec0">{max_v*pct:.0f}</text>',
+        ]
 
-    # 막대 + 라벨
-    bars = []
     for i, v in enumerate(values):
         bh = (v / max_v) * ch if max_v else 0
-        x  = pl + i * bar_slot + gap
-        y  = pt + ch - bh
-        cx = pl + i * bar_slot + bar_slot / 2   # 막대 중앙 x
+        x  = PL + i * slot + (slot - bw) / 2
+        y  = PT + ch - bh
+        cx = PL + i * slot + slot / 2
+        cy = PT + ch - (v / max_v) * ch if max_v else PT + ch
+        pts.append(f"{cx:.1f},{cy:.1f}")
+        bars += [
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" rx="3" fill="#FF6B35" opacity="0.9"/>',
+            f'<text x="{cx:.1f}" y="{y-5:.1f}" text-anchor="middle" font-size="9" fill="#FF6B35" font-weight="700">{v:.0f}</text>',
+            f'<text x="{cx:.1f}" y="{PT+ch+18:.1f}" text-anchor="middle" font-size="10" fill="#718096">{_MONTHS[i]}</text>',
+        ]
 
-        # 하이라이트: 최대·최솟값 색상 구분
-        if v == max(values):
-            fill = "url(#barHigh)"
-        elif v == min(values):
-            fill = "url(#barLow)"
-        else:
-            fill = "url(#barNorm)"
-
-        bars.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" '
-            f'rx="3" fill="{fill}"/>'
-        )
-        # 값 레이블 (막대 위)
-        bars.append(
-            f'<text x="{cx:.1f}" y="{y-5:.1f}" text-anchor="middle" '
-            f'font-size="9" fill="#4a6fa5" font-weight="600">{v:.0f}</text>'
-        )
-        # 월 레이블 (아래)
-        bars.append(
-            f'<text x="{cx:.1f}" y="{pt+ch+20:.1f}" text-anchor="middle" '
-            f'font-size="10" fill="#8898b4">{_MONTHS[i]}</text>'
-        )
-
-    return f"""<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block">
-  <defs>
-    <linearGradient id="barNorm" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1565c0"/>
-      <stop offset="100%" stop-color="#5ea5f0"/>
-    </linearGradient>
-    <linearGradient id="barHigh" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#fbbf24"/>
-    </linearGradient>
-    <linearGradient id="barLow" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#64b5f6"/>
-      <stop offset="100%" stop-color="#90caf9"/>
-    </linearGradient>
-  </defs>
-  {"".join(grid_lines)}
-  {"".join(bars)}
-</svg>"""
+    poly = (
+        f'<polyline points="{" ".join(pts)}" fill="none" stroke="#1E6FD9"'
+        f' stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    )
+    dots = "".join(
+        f'<circle cx="{p.split(",")[0]}" cy="{p.split(",")[1]}" r="3.5"'
+        f' fill="white" stroke="#1E6FD9" stroke-width="2.5"/>'
+        for p in pts
+    )
+    return (
+        f'<svg viewBox="0 0 {W} {H}" style="width:100%;height:{H}px;display:block">'
+        + "".join(grid) + "".join(bars) + poly + dots + "</svg>"
+    )
 
 
 def _fmt(v) -> str:
@@ -350,424 +319,278 @@ def _elev_bar(deg: float, max_deg: float = 90.0) -> str:
     )
 
 
-def _render_html(s: dict, map_b64: str | None = None) -> str:
+def _render_html(s: dict, map_b64: str | None = None) -> str:  # noqa: C901
     b  = s["건물정보"]
     r  = s["지붕분석"]
     e  = s["태양광시스템"]
     st = s["구조설계"]
     ec = s["경제성"]
-    date_str   = s["생성일시"].replace("T", " ")
-    notes_html = "".join(
-        f'<div class="alert">{n}</div>' for n in s["특이사항"]
-    ) or '<p class="no-note">특이사항 없음</p>'
-    chart_svg  = _monthly_chart(e["월별발전량_kWh"])
-    map_section = (
-        f'<div style="max-width:980px;margin:0 auto;padding:20px 24px 0">'
-        f'<div style="border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">'
-        f'<img src="data:image/png;base64,{map_b64}" style="width:100%;height:auto;display:block" alt="건물 위치 지도"/>'
-        f'<div style="background:#fff;padding:10px 18px;font-size:0.82em;color:#7888a4">📍 {s["주소"]}</div>'
-        f'</div></div>'
-    ) if map_b64 else ''
+    date_str = s["생성일시"].replace("T", " ")
 
+    # ── 인라인 헬퍼 (f-string 내부 중괄호 문제 방지를 위해 함수로 분리) ──────
+
+    def row(label: str, value: str, color: str = "#1a202c") -> str:
+        return (
+            '<div style="display:flex;justify-content:space-between;align-items:center;'
+            'padding:10px 0;border-bottom:1px solid #f0f3f9;font-size:14px">'
+            f'<span style="color:#4a5568">{label}</span>'
+            f'<span style="font-weight:600;color:{color}">{value}</span>'
+            '</div>'
+        )
+
+    def sub_label(text: str) -> str:
+        return (
+            '<div style="font-size:11px;font-weight:700;color:#1E6FD9;'
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">'
+            f'{text}</div>'
+        )
+
+    def two_col(left: str, right: str) -> str:
+        return (
+            '<div class="two-col-grid" style="display:grid;'
+            'grid-template-columns:1fr 1fr;gap:32px">'
+            f'<div>{left}</div><div>{right}</div></div>'
+        )
+
+    def card(title: str, body: str) -> str:
+        return (
+            '<div style="background:#fff;border-radius:12px;padding:28px 32px;'
+            'box-shadow:0 4px 16px rgba(0,0,0,0.08);border:1px solid #e2e8f0;'
+            'border-top:3px solid #1E6FD9;margin-bottom:20px">'
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;'
+            'padding-bottom:14px;border-bottom:1.5px solid #eef1f8">'
+            '<div style="width:4px;height:18px;background:#1E6FD9;border-radius:2px"></div>'
+            f'<span style="font-size:15px;font-weight:700;color:#1a202c">{title}</span>'
+            '</div>'
+            + body + '</div>'
+        )
+
+    # ── 지도 ─────────────────────────────────────────────────────────────────
+    map_html = ""
+    if map_b64:
+        map_html = (
+            '<div style="max-width:1080px;margin:0 auto;padding:0 24px 24px">'
+            '<div style="border-radius:12px;overflow:hidden;'
+            'box-shadow:0 4px 16px rgba(0,0,0,0.08)">'
+            f'<img src="data:image/png;base64,{map_b64}"'
+            ' style="width:100%;display:block" alt="위치"/>'
+            f'<div style="background:#fff;padding:10px 18px;font-size:13px;'
+            f'color:#718096">📍 {s["주소"]}</div>'
+            '</div></div>'
+        )
+
+    # ── KPI 카드 ──────────────────────────────────────────────────────────────
+    kpi_items = [
+        ("⚡", f"{e['총용량_kW']}", "kWp", "설치 용량",       "#1E6FD9", "#e8f0fc"),
+        ("☀️", f"{e['연간발전량_kWh']:,.0f}", "kWh", "연간 발전량", "#FF6B35", "#fff1ec"),
+        ("💰", f"{ec['연간절감액_만원']:,.1f}", "만원", "연간 절감액",  "#2ecc71", "#e8f8f0"),
+        ("📈", f"{ec['단순회수기간_년']}", "년",  "투자 회수 기간", "#1E6FD9", "#e8f0fc"),
+        ("🌿", f"{ec['연간CO2저감_kg']:,}", "kg",  "CO₂ 저감량",  "#2ecc71", "#e8f8f0"),
+    ]
+    kpi_html = "".join(
+        '<div style="background:#fff;border-radius:12px;padding:20px;'
+        'box-shadow:0 4px 16px rgba(0,0,0,0.08);border:1px solid #e2e8f0;'
+        f'border-bottom:3px solid {c};display:flex;align-items:center;gap:14px">'
+        '<div style="flex:1">'
+        f'<div style="font-size:11px;font-weight:600;color:#a0aec0;'
+        f'text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">{lbl}</div>'
+        f'<div style="font-size:24px;font-weight:800;color:#1a202c;line-height:1">{val}'
+        f'<span style="font-size:13px;font-weight:500;color:#4a5568;margin-left:3px">{u}</span></div>'
+        '</div>'
+        f'<div style="width:46px;height:46px;border-radius:12px;background:{ibg};'
+        f'display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">{ic}</div>'
+        '</div>'
+        for ic, val, u, lbl, c, ibg in kpi_items
+    )
+
+    # ── 건물 정보 ─────────────────────────────────────────────────────────────
+    building_section = card("🏢 건물 정보",
+        row("건물 유형", b["유형"]) +
+        row("지상 층수", f"{b['층수']}층") +
+        row("건축면적 (지붕 기준)", f"{b['지붕면적_m2']:,.1f} m²") +
+        row("지붕 형태", b["지붕형태"]) +
+        row("지붕 경사각", f"{b['경사각_deg']}°") +
+        row("건물 구조", b["구조"])
+    )
+
+    # ── 지붕 분석 ─────────────────────────────────────────────────────────────
+    roof_left = (
+        sub_label("절기별 정오 태양 고도각 (서울 37.5°N)") +
+        row("동지 (12/21)",  f"{r['태양고도각']['동지']}°") +
+        row("춘추분 (3/21)", f"{r['태양고도각']['춘추분']}°") +
+        row("하지 (6/21)",   f"{r['태양고도각']['하지']}°")
+    )
+    roof_right = (
+        sub_label("배치 설계 파라미터") +
+        row("GCR", str(r["GCR"])) +
+        row("유효 설치 면적", f"{r['유효면적_m2']:,.1f} m²") +
+        row("방위각", f"{r['방위각_deg']:.0f}° ({_azimuth_label(r['방위각_deg'])}향)") +
+        row("방위각 보정계수", f"{r['방위각_보정계수']:.3f}") +
+        row("음영 손실률", f"{r['음영손실률']*100:.1f}%") +
+        row("패널 설치 경사각", f"{r['경사각_deg']:.0f}°")
+    )
+    roof_section = card("🔍 지붕 분석", two_col(roof_left, roof_right))
+
+    # ── 태양광 시스템 ─────────────────────────────────────────────────────────
+    ws = e["배선사양"]
+    sys_left = (
+        sub_label("시스템 기본 사양") +
+        row("패널 수", f"{e['패널수']}장") +
+        row("시스템 총 용량", f"{e['총용량_kW']} kWp") +
+        row("연간 예상 발전량", f"{e['연간발전량_kWh']:,.0f} kWh", "#1E6FD9") +
+        row("인버터 용량", f"{e['인버터용량_kW']} kW") +
+        row("직병렬 구성", e["직병렬구성"])
+    )
+    sys_right = (
+        sub_label("배선 사양 (KEC 기준)") +
+        row("DC 케이블 단면적", f"{ws.get('dc_cable_mm2', '-')} mm²") +
+        row("AC 케이블 단면적", f"{ws.get('ac_cable_mm2', '-')} mm²") +
+        row("접속함 (Combiner Box)", "필요" if ws.get("combiner_box_required") else "불필요") +
+        row("스트링 퓨즈 용량", f"{ws.get('string_fuse_A', '-')} A") +
+        row("접지 방식", ws.get("grounding_scheme", "-"))
+    )
+    system_section = card("⚡ 태양광 시스템 사양", two_col(sys_left, sys_right))
+
+    # ── 월별 발전량 ───────────────────────────────────────────────────────────
+    chart_legend = (
+        '<div style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap">'
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;'
+        'font-weight:500;color:#4a5568">'
+        '<div style="width:10px;height:10px;border-radius:2px;background:#FF6B35"></div>'
+        '월별 발전량 (kWh)</div>'
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;'
+        'font-weight:500;color:#4a5568">'
+        '<div style="width:10px;height:10px;border-radius:50%;background:#1E6FD9"></div>'
+        '발전량 추이</div></div>'
+    )
+    chart_note = (
+        '<div style="font-size:11px;color:#a0aec0;text-align:right;margin-top:4px">'
+        '단위: kWh / 월</div>'
+    )
+    chart_section = card(
+        "📊 월별 예상 발전량",
+        chart_legend + _monthly_chart(e["월별발전량_kWh"]) + chart_note
+    )
+
+    # ── 구조 설계 ─────────────────────────────────────────────────────────────
+    anc = st["앙카사양"]
+    str_left = (
+        sub_label("하중 및 마운팅") +
+        row("마운팅 방식", st["마운팅방식"]) +
+        row("패널 + 마운트 총 중량", f"{st['총중량_kg']:,.1f} kg") +
+        row("설계 풍하중 (KBC 2022)", f"{st['풍하중_kN']} kN") +
+        row("설계 적설하중 (KBC 2022)", f"{st['적설하중_kN']} kN")
+    )
+    str_right = (
+        sub_label("앙카 사양") +
+        row("앙카 종류", anc.get("type", "-")) +
+        row("패널당 앙카 수", str(anc.get("count_per_panel", "-"))) +
+        row("총 앙카 수", str(anc.get("total_count", "-"))) +
+        row("설계 인발력", f"{anc.get('design_pull_kn', '-')} kN")
+    )
+    structural_section = card("🔩 구조 설계", two_col(str_left, str_right))
+
+    # ── 경제성 분석 ───────────────────────────────────────────────────────────
+    ec_left = (
+        row("예상 설치비", f"약 {ec['예상설치비_만원']:,} 만원") +
+        row("연간 전기 절감액", f"약 {ec['연간절감액_만원']:,} 만원 / 년", "#FF6B35")
+    )
+    ec_right = (
+        row("단순 투자 회수 기간", f"{ec['단순회수기간_년']} 년", "#1E6FD9") +
+        row("연간 CO₂ 저감량", f"{ec['연간CO2저감_kg']:,} kg-CO₂ / 년", "#2ecc71")
+    )
+    ec_note = (
+        '<div style="margin-top:16px;padding:12px 16px;background:#f8faff;'
+        'border-radius:8px;font-size:12px;color:#718096;border:1px solid #e2e8f0">'
+        '💡 설치비 150만원/kW · 전기단가 120원/kWh · CO₂ 배출계수 0.4599 kg/kWh '
+        '(2023년 기준) 추정값입니다.</div>'
+    )
+    economics_section = card("💰 경제성 분석", two_col(ec_left, ec_right) + ec_note)
+
+    # ── 특이사항 ──────────────────────────────────────────────────────────────
+    notes_items = s["특이사항"]
+    notes_body = (
+        "".join(
+            '<div style="background:#fffbeb;border-left:3px solid #f59e0b;'
+            'padding:10px 14px;border-radius:0 8px 8px 0;font-size:13px;'
+            f'color:#78450a;margin-bottom:8px">⚠️ {n}</div>'
+            for n in notes_items
+        ) or '<p style="color:#a0aec0;font-size:14px">특이사항 없음</p>'
+    )
+    notes_section = card("⚠️ 특이사항 및 권고사항", notes_body)
+
+    # ── 최종 HTML 조립 ───────────────────────────────────────────────────────
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>태양광 설계 보고서 — {s['주소']}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-      background: #eef1f7;
-      color: #1a2332;
-      line-height: 1.65;
+      font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+      background: #F5F7FA;
+      color: #1a202c;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
     }}
-
-    /* ── Header ── */
-    .header {{
-      background: linear-gradient(135deg, #0a2744 0%, #1565c0 55%, #42a5f5 100%);
-      color: #fff;
-      padding: 44px 52px 40px;
-    }}
-    .header-badge {{
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(255,255,255,0.15);
-      border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 20px;
-      padding: 4px 14px;
-      font-size: 0.76em;
-      letter-spacing: 0.07em;
-      margin-bottom: 16px;
-    }}
-    .header h1 {{
-      font-size: 1.9em;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 14px;
-    }}
-    .header-meta {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 28px;
-      font-size: 0.88em;
-      opacity: 0.88;
-    }}
-
-    /* ── Container ── */
-    .container {{ max-width: 980px; margin: 0 auto; padding: 32px 24px 56px; }}
-
-    /* ── KPI Grid ── */
-    .kpi-grid {{
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 14px;
-      margin-bottom: 24px;
-    }}
-    .kpi-card {{
-      background: #fff;
-      border-radius: 14px;
-      padding: 22px 14px 18px;
-      text-align: center;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-      border-top: 3px solid #1565c0;
-    }}
-    .kpi-icon {{ font-size: 1.55em; margin-bottom: 7px; }}
-    .kpi-val  {{ font-size: 1.85em; font-weight: 800; color: #0a2744; line-height: 1.15; }}
-    .kpi-lbl  {{ font-size: 0.74em; color: #7888a4; margin-top: 5px; }}
-
-    /* ── Section card ── */
-    .section {{
-      background: #fff;
-      border-radius: 14px;
-      padding: 28px 32px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    }}
-    .section-title {{
-      font-size: 1.02em;
-      font-weight: 700;
-      color: #0a2744;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding-bottom: 14px;
-      margin-bottom: 20px;
-      border-bottom: 1.5px solid #eef1f8;
-    }}
-    .section-num {{
-      background: #1565c0;
-      color: #fff;
-      border-radius: 50%;
-      width: 26px; height: 26px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.8em;
-      font-weight: 700;
-      flex-shrink: 0;
-    }}
-
-    /* ── Two-column layout ── */
-    .two-col {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 36px;
-    }}
-    .sub-label {{
-      font-size: 0.72em;
-      font-weight: 700;
-      color: #1565c0;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-    }}
-
-    /* ── Table ── */
-    table {{ width: 100%; border-collapse: collapse; }}
-    tr {{ border-bottom: 1px solid #f0f3f9; }}
-    tr:last-child {{ border-bottom: none; }}
-    th {{
-      width: 48%;
-      padding: 9px 0;
-      color: #8898b4;
-      font-weight: 600;
-      font-size: 0.83em;
-      text-align: left;
-      vertical-align: top;
-    }}
-    td {{
-      padding: 9px 0 9px 6px;
-      color: #1a2332;
-      font-size: 0.92em;
-      font-weight: 500;
-    }}
-
-    /* ── Alert ── */
-    .alert {{
-      background: #fffbeb;
-      border-left: 3px solid #f59e0b;
-      padding: 10px 14px;
-      border-radius: 0 8px 8px 0;
-      font-size: 0.89em;
-      color: #78450a;
-      margin-bottom: 8px;
-    }}
-    .alert::before {{ content: "[주의] "; }}
-    .no-note {{ font-size: 0.9em; color: #a0aec0; }}
-
-    /* ── Footnote ── */
-    .footnote {{
-      font-size: 0.78em;
-      color: #a0aec0;
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid #eef1f8;
-    }}
-
-    /* ── Footer ── */
-    .footer {{
-      text-align: center;
-      padding: 20px;
-      font-size: 0.78em;
-      color: #a0aec0;
-    }}
-
-    /* ── Mobile ── */
-    .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
 
     @media (max-width: 768px) {{
-      body {{ font-size: 0.9rem; }}
-      .header {{ padding: 24px 16px 20px; }}
-      .header h1 {{ font-size: 1.4rem; }}
-      .header-meta {{ font-size: 0.82rem; gap: 4px 14px; }}
-      .container {{ padding: 16px 12px 40px; }}
-      .kpi-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
-      .kpi-val {{ font-size: 1.4rem; }}
-      .kpi-lbl {{ font-size: 0.72rem; }}
-      .section {{ padding: 20px 16px; }}
-      .two-col {{ grid-template-columns: 1fr; gap: 20px; }}
-      th {{ font-size: 0.78rem; }}
-      td {{ font-size: 0.86rem; }}
+      .kpi-grid {{ grid-template-columns: repeat(2,1fr) !important; gap:10px !important; }}
+      .two-col-grid {{ grid-template-columns: 1fr !important; gap:16px !important; }}
+      .main-pad {{ padding: 16px 14px 40px !important; }}
+      h1 {{ font-size: 1.4rem !important; }}
     }}
-
     @media print {{
-      body {{ background: #fff; }}
-      .section, .kpi-card {{ box-shadow: none; border: 1px solid #e2e8f0; page-break-inside: avoid; }}
+      body {{ background:#fff; }}
+      div[style*="box-shadow"] {{ box-shadow:none !important; border:1px solid #e2e8f0; page-break-inside:avoid; }}
     }}
   </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-badge">☀ 태양광 설계 자동화 시스템</div>
-  <h1>설계 보고서</h1>
-  <div class="header-meta">
+<!-- 헤더 -->
+<div style="background:linear-gradient(135deg,#0a2744 0%,#1E6FD9 55%,#42a5f5 100%);color:#fff;padding:40px 48px 36px">
+  <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:4px 14px;font-size:12px;letter-spacing:0.07em;margin-bottom:14px">
+    ☀ AI 태양광 입지 분석 자동화 프로그램
+  </div>
+  <h1 style="font-size:28px;font-weight:900;letter-spacing:-0.3px;margin-bottom:12px">태양광 설계 분석 보고서</h1>
+  <div style="display:flex;flex-wrap:wrap;gap:6px 28px;font-size:14px;opacity:0.88">
     <span>📍 {s['주소']}</span>
     <span>🗓 {date_str}</span>
   </div>
 </div>
 
-{map_section}
+{map_html}
 
-<div class="container">
+<div class="main-pad" style="max-width:1080px;margin:0 auto;padding:28px 24px 56px">
 
-  <!-- KPI 카드 -->
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-icon">🔆</div>
-      <div class="kpi-val">{e['패널수']}</div>
-      <div class="kpi-lbl">패널 수 (장)</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">⚡</div>
-      <div class="kpi-val">{e['총용량_kW']}</div>
-      <div class="kpi-lbl">시스템 용량 (kWp)</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-val">{e['연간발전량_kWh']:,.0f}</div>
-      <div class="kpi-lbl">연간 발전량 (kWh)</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">💰</div>
-      <div class="kpi-val">{ec['단순회수기간_년']}</div>
-      <div class="kpi-lbl">투자 회수 기간 (년)</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">🌿</div>
-      <div class="kpi-val">{ec['연간CO2저감_kg']:,}</div>
-      <div class="kpi-lbl">CO₂ 저감 (kg/년)</div>
-    </div>
+  <!-- KPI -->
+  <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px">
+    {kpi_html}
   </div>
 
-  <!-- 1. 건물 정보 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">1</span> 건물 정보</div>
-    <table>
-      <tr><th>건물 유형</th><td>{b['유형']}</td></tr>
-      <tr><th>지상 층수</th><td>{b['층수']} 층</td></tr>
-      <tr><th>건축면적 (지붕 기준)</th><td>{b['지붕면적_m2']:,.1f} m²</td></tr>
-      <tr><th>지붕 형태</th><td>{b['지붕형태']}</td></tr>
-      <tr><th>지붕 경사각</th><td>{b['경사각_deg']} °</td></tr>
-      <tr><th>건물 구조</th><td>{b['구조']}</td></tr>
-    </table>
-  </div>
-
-  <!-- 2. 지붕 분석 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">2</span> 지붕 분석</div>
-    <div class="two-col">
-      <div>
-        <div class="sub-label">절기별 정오 태양 고도각 (서울 37.5°N)</div>
-        <table>
-          <tr>
-            <th>동지 (12/21)</th>
-            <td>{_elev_bar(r['태양고도각']['동지'])}</td>
-          </tr>
-          <tr>
-            <th>춘추분 (3/21)</th>
-            <td>{_elev_bar(r['태양고도각']['춘추분'])}</td>
-          </tr>
-          <tr>
-            <th>하지 (6/21)</th>
-            <td>{_elev_bar(r['태양고도각']['하지'])}</td>
-          </tr>
-        </table>
-        <div style="font-size:0.76em;color:#a0aec0;margin-top:10px">
-          동지 기준(최저 고도각)으로 행간 이격거리 및 GCR 산정 — 보수적 설계
-        </div>
-      </div>
-      <div>
-        <div class="sub-label">배치 설계 파라미터</div>
-        <table>
-          <tr>
-            <th>GCR (Ground Coverage Ratio)</th>
-            <td><strong>{r['GCR']}</strong>
-              <span style="font-size:0.82em;color:#7888a4;margin-left:4px">
-                (동지 무음영 기준)
-              </span>
-            </td>
-          </tr>
-          <tr><th>유효 설치 면적</th><td>{r['유효면적_m2']:,.1f} m²</td></tr>
-          <tr>
-            <th>방위각</th>
-            <td>{r['방위각_deg']:.0f}° ({_azimuth_label(r['방위각_deg'])}향)</td>
-          </tr>
-          <tr>
-            <th>방위각 보정계수</th>
-            <td>
-              <strong style="color:{'#16a34a' if r['방위각_보정계수'] >= 0.99 else '#dc2626'}">
-                {r['방위각_보정계수']:.3f}
-              </strong>
-              <span style="font-size:0.82em;color:#7888a4;margin-left:4px">
-                (남향 대비 {r['방위각_보정계수']*100:.1f}%)
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <th>음영 손실률</th>
-            <td>{r['음영손실률']*100:.1f}%</td>
-          </tr>
-          <tr><th>패널 설치 경사각</th><td>{r['경사각_deg']:.0f}°</td></tr>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 3. 태양광 시스템 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">3</span> 태양광 시스템 사양</div>
-    <div class="two-col">
-      <div>
-        <div class="sub-label">시스템 기본 사양</div>
-        <table>
-          <tr><th>패널 수</th><td>{e['패널수']} 장</td></tr>
-          <tr><th>시스템 총 용량</th><td>{e['총용량_kW']} kWp</td></tr>
-          <tr><th>연간 예상 발전량</th><td>{e['연간발전량_kWh']:,.0f} kWh</td></tr>
-          <tr><th>인버터 용량</th><td>{e['인버터용량_kW']} kW</td></tr>
-          <tr><th>직병렬 구성</th><td>{e['직병렬구성']}</td></tr>
-        </table>
-      </div>
-      <div>
-        <div class="sub-label">배선 사양 (KEC 기준)</div>
-        <table>{_rows(e['배선사양'], _WIRING_LABELS)}</table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 4. 월별 발전량 차트 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">4</span> 월별 예상 발전량
-      <span style="margin-left:auto;font-size:0.8em;font-weight:400;color:#a0aec0">
-        ■ 최대 &nbsp; ■ 평균 &nbsp; ■ 최소
-      </span>
-    </div>
-    <div style="margin-bottom:6px">
-      {chart_svg}
-    </div>
-    <div style="font-size:0.78em;color:#a0aec0;text-align:right">단위: kWh / 월</div>
-  </div>
-
-  <!-- 5. 구조 설계 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">5</span> 구조 설계</div>
-    <div class="two-col">
-      <div>
-        <div class="sub-label">하중 및 마운팅</div>
-        <table>
-          <tr><th>마운팅 방식</th><td>{st['마운팅방식']}</td></tr>
-          <tr><th>패널 + 마운트 총 중량</th><td>{st['총중량_kg']:,.1f} kg</td></tr>
-          <tr><th>설계 풍하중 (KBC 2022)</th><td>{st['풍하중_kN']} kN</td></tr>
-          <tr><th>설계 적설하중 (KBC 2022)</th><td>{st['적설하중_kN']} kN</td></tr>
-        </table>
-      </div>
-      <div>
-        <div class="sub-label">앙카 사양</div>
-        <table>{_rows(st['앙카사양'], _ANCHOR_LABELS)}</table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 6. 경제성 분석 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">6</span> 경제성 분석</div>
-    <table>
-      <tr><th>예상 설치비</th><td>약 {ec['예상설치비_만원']:,} 만원</td></tr>
-      <tr><th>연간 전기 절감액</th><td>약 {ec['연간절감액_만원']:,} 만원 / 년</td></tr>
-      <tr><th>단순 투자 회수 기간</th><td>{ec['단순회수기간_년']} 년</td></tr>
-      <tr><th>연간 CO₂ 저감량</th><td>{ec['연간CO2저감_kg']:,} kg-CO₂ / 년</td></tr>
-    </table>
-    <div class="footnote">
-      설치비 150만원/kW · 전기단가 120원/kWh · CO₂ 배출계수 0.4599 kg/kWh (2023년 기준) 추정값입니다.
-    </div>
-  </div>
-
-  <!-- 7. 특이사항 -->
-  <div class="section">
-    <div class="section-title"><span class="section-num">7</span> 특이사항</div>
-    {notes_html}
-  </div>
+  {building_section}
+  {roof_section}
+  {system_section}
+  {chart_section}
+  {structural_section}
+  {economics_section}
+  {notes_section}
 
 </div>
 
-<div class="footer">
-  태양광 설계 자동화 시스템 &nbsp;·&nbsp; {date_str} 생성
+<div style="text-align:center;padding:20px;font-size:12px;color:#a0aec0">
+  AI 태양광 입지 분석 자동화 프로그램 &nbsp;·&nbsp; {date_str} 생성
 </div>
-
-<script>
-document.querySelectorAll('.section table, .two-col table').forEach(function(t){{
-  var w = document.createElement('div');
-  w.className = 'table-wrap';
-  t.parentNode.insertBefore(w, t);
-  w.appendChild(t);
-}});
-</script>
 
 </body>
 </html>"""
+
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
