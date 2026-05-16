@@ -535,6 +535,24 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:
       color: #a0aec0;
     }}
 
+    /* ── Mobile ── */
+    .table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+
+    @media (max-width: 768px) {{
+      body {{ font-size: 0.9rem; }}
+      .header {{ padding: 24px 16px 20px; }}
+      .header h1 {{ font-size: 1.4rem; }}
+      .header-meta {{ font-size: 0.82rem; gap: 4px 14px; }}
+      .container {{ padding: 16px 12px 40px; }}
+      .kpi-grid {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
+      .kpi-val {{ font-size: 1.4rem; }}
+      .kpi-lbl {{ font-size: 0.72rem; }}
+      .section {{ padding: 20px 16px; }}
+      .two-col {{ grid-template-columns: 1fr; gap: 20px; }}
+      th {{ font-size: 0.78rem; }}
+      td {{ font-size: 0.86rem; }}
+    }}
+
     @media print {{
       body {{ background: #fff; }}
       .section, .kpi-card {{ box-shadow: none; border: 1px solid #e2e8f0; page-break-inside: avoid; }}
@@ -738,6 +756,15 @@ def _render_html(s: dict, map_b64: str | None = None) -> str:
 <div class="footer">
   태양광 설계 자동화 시스템 &nbsp;·&nbsp; {date_str} 생성
 </div>
+
+<script>
+document.querySelectorAll('.section table, .two-col table').forEach(function(t){{
+  var w = document.createElement('div');
+  w.className = 'table-wrap';
+  t.parentNode.insertBefore(w, t);
+  w.appendChild(t);
+}});
+</script>
 
 </body>
 </html>"""
@@ -1007,6 +1034,15 @@ def _render_comparison_html(summaries: list[dict], ts: datetime.datetime) -> str
     .footer {{
       text-align: center; padding: 20px;
       font-size: 0.78em; color: #a0aec0;
+    }}
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {{
+      body {{ font-size: 0.88rem; }}
+      .header {{ padding: 24px 16px 20px; }}
+      .header h1 {{ font-size: 1.35rem; }}
+      .container {{ padding: 16px 12px 40px; }}
+      .bld-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>

@@ -15,7 +15,7 @@ export default function DownloadButtons({ htmlPath, pdfPath }) {
   return (
     <div className="download-row">
       {htmlUrl ? (
-        <a className="dl-btn dl-btn-html" href={htmlUrl} target="_blank" rel="noreferrer" download>
+        <a className="dl-btn dl-btn-html" href={htmlUrl} target="_blank" rel="noreferrer">
           🌐 HTML 보고서
         </a>
       ) : (
