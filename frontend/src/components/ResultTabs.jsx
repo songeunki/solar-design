@@ -9,11 +9,11 @@ import DownloadButtons from './DownloadButtons';
 const PanelLayout3D = lazy(() => import('./PanelLayout3D'));
 
 const TABS = [
-  { id: 'location',   icon: '📍', label: '입지 분석' },
-  { id: 'revenue',    icon: '💰', label: '수익 분석' },
-  { id: 'design',     icon: '🔧', label: '설계 분석' },
-  { id: 'regulation', icon: '🏛️', label: '규제 분석' },
-  { id: 'ai',         icon: '🤖', label: 'AI 종합 평가' },
+  { id: 'location',   icon: <i className="fa-solid fa-location-dot" style={{marginRight:0}}></i>,     label: '입지 분석' },
+  { id: 'revenue',    icon: <i className="fa-solid fa-chart-line" style={{marginRight:0}}></i>,        label: '수익 분석' },
+  { id: 'design',     icon: <i className="fa-solid fa-drafting-compass" style={{marginRight:0}}></i>,  label: '설계 분석' },
+  { id: 'regulation', icon: <i className="fa-solid fa-scale-balanced" style={{marginRight:0}}></i>,   label: '규제 분석' },
+  { id: 'ai',         icon: <i className="fa-solid fa-robot" style={{marginRight:0}}></i>,             label: 'AI 종합 평가' },
 ];
 
 // ── 공통 KPI 카드 ────────────────────────────────────────────────────────────
@@ -258,10 +258,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
 
   // ── KPI 세트 ────────────────────────────────────────────────────────────────
   const locationKpis = [
-    { icon: '⚡', label: '설치 용량',  value: system.totalKw ?? '-',                                unit: 'kW',  color: 'blue'   },
-    { icon: '☀️', label: '연간 발전량', value: system.yearlyTotal ? system.yearlyTotal.toLocaleString() : '-', unit: 'kWh', color: 'orange' },
-    { icon: '💰', label: '연간 수익',   value: financial.yearlyRevenue ? `${Math.round(financial.yearlyRevenue / 10000).toLocaleString()}만` : '-', unit: '원', color: 'green' },
-    { icon: '📈', label: '투자 회수',   value: financial.paybackYear ?? '-',                          unit: '년',  color: 'blue'   },
+    { icon: <i className="fa-solid fa-bolt" style={{marginRight:0}}></i>,              label: '설치 용량',  value: system.totalKw ?? '-',                                unit: 'kW',  color: 'blue'   },
+    { icon: <i className="fa-solid fa-sun" style={{marginRight:0}}></i>,               label: '연간 발전량', value: system.yearlyTotal ? system.yearlyTotal.toLocaleString() : '-', unit: 'kWh', color: 'orange' },
+    { icon: <i className="fa-solid fa-coins" style={{marginRight:0}}></i>,             label: '연간 수익',   value: financial.yearlyRevenue ? `${Math.round(financial.yearlyRevenue / 10000).toLocaleString()}만` : '-', unit: '원', color: 'green' },
+    { icon: <i className="fa-solid fa-clock-rotate-left" style={{marginRight:0}}></i>, label: '투자 회수',   value: financial.paybackYear ?? '-',                          unit: '년',  color: 'blue'   },
   ];
 
   const revenueKpis = [
@@ -331,7 +331,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
       <div className="alert-box alert-success" style={{ marginBottom: 16 }}>
         ✅ 분석이 완료되었습니다.
         <button className="btn btn-sm btn-outline" style={{ marginLeft: 'auto', flexShrink: 0 }}
-          onClick={onReset}>새 분석</button>
+          onClick={onReset}><i className="fa-solid fa-rotate"></i> 새 분석</button>
       </div>
 
       {/* ── 탭 바 ─────────────────────────────────────────────────────────── */}
@@ -765,7 +765,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   <button className="btn btn-primary"
                     style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 700, borderRadius: 10 }}
                     onClick={generateAi}>
-                    🤖 AI 종합 평가 생성
+                    <i className="fa-solid fa-wand-magic-sparkles"></i> AI 종합 평가 생성
                   </button>
                 )}
 
@@ -794,7 +794,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                       <button className="btn btn-outline"
                         style={{ marginTop: 12, fontSize: 12 }}
                         onClick={() => { setAiState('idle'); setAiText(''); }}>
-                        ↺ 다시 생성
+                        <i className="fa-solid fa-arrows-rotate"></i> 다시 생성
                       </button>
                     )}
                   </div>

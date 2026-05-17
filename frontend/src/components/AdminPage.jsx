@@ -118,7 +118,7 @@ export default function AdminPage() {
           width: 32, height: 32, background: 'rgba(255,255,255,0.2)',
           borderRadius: 8, display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontSize: 18,
-        }}>☀️</div>
+        }}><i className="fa-solid fa-solar-panel" style={{color:'white', marginRight:0}}></i></div>
         <span style={{ color: 'white', fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>
           AI 태양광 입지 분석 자동화 프로그램
         </span>
@@ -129,10 +129,10 @@ export default function AdminPage() {
           fontSize: 12, padding: '4px 12px', borderRadius: 20,
           border: '1px solid rgba(255,255,255,0.3)',
         }}>
-          🔧 관리자 설정
+          <i className="fa-solid fa-gear"></i> 관리자 설정
         </span>
         <a href="/" style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, textDecoration: 'none' }}>
-          ← 메인으로
+          <i className="fa-solid fa-arrow-left"></i> 메인으로
         </a>
       </div>
     </header>
@@ -285,7 +285,7 @@ export default function AdminPage() {
           >
             {status === 'saving'
               ? <><span className="spinner" style={{ marginRight: 8 }} />저장 중…</>
-              : '💾 저장하기'}
+              : <><i className="fa-solid fa-floppy-disk"></i> 저장하기</>}
           </button>
 
           {status === 'saved' && (

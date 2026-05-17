@@ -18,7 +18,7 @@ export default function App() {
       {/* ===== 헤더 ===== */}
       <header className="app-header">
         <div className="header-logo">
-          <div className="header-logo-icon">☀️</div>
+          <div className="header-logo-icon"><i className="fa-solid fa-solar-panel"></i></div>
           AI 태양광 입지 분석 자동화 프로그램
         </div>
         <span className="header-badge">Beta v1.0</span>
@@ -32,13 +32,13 @@ export default function App() {
             className={`tab-btn ${activeTab === 'single' ? 'active' : ''}`}
             onClick={() => setActiveTab('single')}
           >
-            🏠 단일 분석
+            <i className="fa-solid fa-house"></i> 단일 분석
           </button>
           <button
             className={`tab-btn ${activeTab === 'compare' ? 'active' : ''}`}
             onClick={() => setActiveTab('compare')}
           >
-            ⚖️ 비교 분석
+            <i className="fa-solid fa-code-compare"></i> 비교 분석
           </button>
         </div>
 

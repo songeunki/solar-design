@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap');
 
+/* ===== Font Awesome 아이콘 ===== */
+.fa-solid { margin-right: 6px; }
+.app-header .fa-solid { color: white; }
+.result-tab-btn .fa-solid { color: inherit; margin-right: 4px; }
+
 /* ===== 디자인 토큰 ===== */
 :root {
   --blue: #1E6FD9;

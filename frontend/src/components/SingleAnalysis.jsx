@@ -98,7 +98,7 @@ export default function SingleAnalysis() {
       {/* ── 사이드바: 입력 + 지도(분석 전) ── */}
       <div className="analysis-sidebar">
         <div className="input-panel">
-          <div className="input-panel-title">🏠 단일 건물 태양광 분석</div>
+          <div className="input-panel-title"><i className="fa-solid fa-house"></i> 단일 건물 태양광 분석</div>
           <AddressInput onSubmit={startAnalysis} disabled={status === 'loading'} />
           <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
             {isDone
@@ -123,7 +123,7 @@ export default function SingleAnalysis() {
 
         {status === 'idle' && (
           <div className="idle-state">
-            <div className="idle-icon">☀️</div>
+            <div className="idle-icon"><i className="fa-solid fa-sun" style={{marginRight:0}}></i></div>
             <p className="idle-title">분석 준비 완료</p>
             <p className="idle-desc">
               좌측에서 주소를 입력하거나 지도를 클릭해 분석을 시작하세요

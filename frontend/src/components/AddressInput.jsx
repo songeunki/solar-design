@@ -73,7 +73,7 @@ export default function AddressInput({
               분석 중
             </>
           ) : (
-            '🔍 분석'
+            <><i className="fa-solid fa-magnifying-glass"></i> 분석</>
           )}
         </button>
       </div>
