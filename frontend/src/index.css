@@ -920,11 +920,11 @@ body {
 .app-header-dark {
   background: #0A1628;
   border-bottom: 1px solid var(--border-color);
-  height: auto !important;
-  min-height: 56px;
+  height: 60px;
+  min-height: 60px;
   display: flex;
   align-items: center;
-  padding: 8px 24px;
+  padding: 0 24px;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: space-between;
