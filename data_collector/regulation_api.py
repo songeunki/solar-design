@@ -107,7 +107,13 @@ class RegulationAPI:
                 timeout=15,
             )
             resp.raise_for_status()
-            root = ET.fromstring(resp.content)
+            # XML 선언(<?xml ... encoding="UTF-8"?>)을 그대로 str에 넣으면
+            # expat "multi-byte encodings not supported" 에러 발생 → 선언 제거 후 파싱
+            resp.encoding = "utf-8"
+            xml_text = resp.text.strip()
+            if xml_text.startswith("<?xml"):
+                xml_text = xml_text[xml_text.index("?>") + 2:].lstrip()
+            root = ET.fromstring(xml_text or "<response/>")
         except Exception as e:
             result.errors.append(f"LURIS 조회 실패: {e}")
             return
@@ -160,13 +166,18 @@ class RegulationAPI:
         if not VWORLD_LAND_API_KEY:
             result.errors.append("VWORLD_LAND_API_KEY 미설정")
             return
+        import os
+        domain = os.environ.get("VWORLD_DOMAIN", "solar-design-production.up.railway.app")
         try:
             resp = requests.get(
                 VWORLD_LAND_URL,
                 params={
-                    "key":    VWORLD_LAND_API_KEY,
-                    "pnu":    pnu,
-                    "format": "json",
+                    "key":        VWORLD_LAND_API_KEY,
+                    "pnu":        pnu,
+                    "domain":     domain,
+                    "format":     "json",
+                    "numOfRows":  1,
+                    "pageNo":     1,
                 },
                 timeout=12,
             )
