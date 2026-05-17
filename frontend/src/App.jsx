@@ -31,7 +31,7 @@ export default function App() {
           <span className="header-badge-dark">Beta v1.0</span>
         </div>
 
-        <div className="header-center">
+        <div className="header-center" style={{marginTop: '8px', marginBottom: '8px'}}>
           <button
             className={`header-tab ${mode === 'single' ? 'active' : ''}`}
             onClick={() => { setMode('single'); handleReset(); }}
