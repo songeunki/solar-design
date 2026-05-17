@@ -59,6 +59,16 @@ _JIMOK_MAP: dict[str, str] = {
 }
 
 
+_KEPCO_CYBER_URL = "https://cyber.kepco.co.kr/ckepco/front/main.do"
+
+_METRO_CODES: dict[str, str] = {
+    "서울": "11", "부산": "26", "대구": "27", "인천": "28",
+    "광주": "29", "대전": "30", "울산": "31", "세종": "36",
+    "경기": "41", "강원": "42", "충북": "43", "충남": "44",
+    "전북": "45", "전남": "46", "경북": "47", "경남": "48", "제주": "50",
+}
+
+
 @dataclass
 class RegulationResult:
     pnu:             str
@@ -73,7 +83,8 @@ class RegulationResult:
     is_forest:       bool = False
     risk_level:      str  = "확인불가"
     risk_reasons:    list[str] = field(default_factory=list)
-    kepco_url:       str  = "https://kepco.net.works/portal/index.do"
+    kepco_url:       str  = _KEPCO_CYBER_URL
+    kepco:           dict = field(default_factory=dict)
     errors:          list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -91,6 +102,7 @@ class RegulationResult:
             "riskLevel":       self.risk_level,
             "riskReasons":     self.risk_reasons,
             "kepcoUrl":        self.kepco_url,
+            "kepco":           self.kepco,
             "errors":          self.errors,
         }
 
@@ -109,6 +121,7 @@ class RegulationAPI:
         else:
             result.errors.append("PNU 미확보 — 토지특성 조회 불가")
         self._assess_risk(result)
+        self._fetch_kepco(address, result)
         return result
 
     def _estimate_zone_from_purpose(self, building_purpose: str, result: RegulationResult) -> None:
@@ -184,6 +197,38 @@ class RegulationAPI:
                 result.land_use_status = val
             elif name == "heightDegree":
                 result.terrain = val
+
+    def _fetch_kepco(self, address: str, result: RegulationResult) -> None:
+        """한전 계통연계 정보 수집. API 키 없으면 사이버지점 링크로 폴백."""
+        import os
+
+        metro_cd = ""
+        for sido, code in _METRO_CODES.items():
+            if sido in address:
+                metro_cd = code
+                break
+
+        kepco_api_key = os.environ.get("KEPCO_API_KEY", "")
+
+        if kepco_api_key:
+            # data.go.kr 한국전력공사_분산전원연계정보 API 호출 (키 확보 시 활성화)
+            # GET https://apis.data.go.kr/B552584/PowerInfoService/getDistributedPowerInfo
+            # params: serviceKey, sigunguCd, pageNo, numOfRows
+            pass
+
+        result.kepco_url = _KEPCO_CYBER_URL
+        result.kepco = {
+            "available":  False,
+            "message":    "한전 분산전원 연계정보는 직접 조회가 필요합니다",
+            "direct_url": _KEPCO_CYBER_URL,
+            "metro_cd":   metro_cd,
+            "guide": [
+                "아래 버튼으로 한전 사이버지점 접속",
+                "주소 또는 전주번호 입력하여 조회",
+                "배전선로 잔여용량 확인",
+                "설치 용량 대비 잔여용량 충분한지 확인",
+            ],
+        }
 
     def _assess_risk(self, result: RegulationResult) -> None:
         reasons: list[str] = []

@@ -708,26 +708,55 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
 
                   {/* 한전 계통연계 */}
                   <div className="card card-accent">
-                    <SectionHeader title="⚡ 한전 계통연계 신청" />
-                    <div style={{ padding: '12px 24px 20px' }}>
-                      <div style={{
-                        background: '#ebf8ff', border: '1px solid #bee3f8',
-                        borderRadius: 8, padding: '14px 16px', marginBottom: 12,
-                        fontSize: 13, color: '#2c5282', lineHeight: 1.7,
-                      }}>
-                        <strong>계통연계 검토는 필수입니다.</strong> 한전 배전설비 용량·거리에 따라
-                        연계 가능 여부와 공사비가 달라집니다.
-                        접속가능용량 조회 후 설치 규모를 결정하세요.
+                    <SectionHeader title="⚡ 한전 계통연계 선로용량" />
+                    <div style={{ padding: '16px 24px 20px' }}>
+                      <div className="kepco-guide-card">
+                        {/* 단계별 안내 */}
+                        <div className="kepco-steps">
+                          {[
+                            '아래 버튼으로 한전 사이버지점 접속',
+                            '주소 또는 전주번호 입력하여 조회',
+                            `배전선로 잔여용량 확인 (설치용량 ${system.totalKw ?? '-'}kW 이상 필요)`,
+                            '변전소/변압기/DL별 잔여용량이 설치용량 이상인지 확인',
+                          ].map((text, i) => (
+                            <div key={i} className="step">
+                              <span className="step-num">{i + 1}</span>
+                              <span>{text}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 확인 기준 */}
+                        <div className="kepco-criteria">
+                          {[
+                            '변전소 여유용량 (vol1): 설치용량 이상',
+                            '변압기 여유용량 (vol2): 설치용량 이상',
+                            'DL 여유용량 (vol3): 설치용량 이상',
+                          ].map((text, i) => (
+                            <div key={i} className="criteria-item">
+                              <i className="fa-solid fa-circle-check" style={{ color: 'var(--green)', marginRight: 6 }}></i>
+                              <span>{text}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 바로가기 버튼 */}
+                        <a
+                          href={reg.kepcoUrl || 'https://cyber.kepco.co.kr/ckepco/front/main.do'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-kepco-primary"
+                        >
+                          <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                          한전 선로용량 직접 조회
+                        </a>
                       </div>
-                      <a
-                        href={reg.kepcoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-primary"
-                        style={{ display: 'inline-block', padding: '10px 24px', textDecoration: 'none', fontSize: 14 }}
-                      >
-                        ⚡ 한전 전력계통 접속신청 바로가기
-                      </a>
+
+                      {/* 주의사항 */}
+                      <div className="kepco-notice">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                        현재 잔여용량이 있어도 타 사업자 허가 신청 현황 확인 필수
+                      </div>
                     </div>
                   </div>
                 </>
