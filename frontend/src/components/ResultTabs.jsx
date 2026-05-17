@@ -405,23 +405,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
               </div>
             </div>
 
-            {/* 위성지도 + 패널 오버레이 */}
-            <div className="card card-accent">
-              <SectionHeader
-                title="🛰 위성지도 패널 오버레이"
-                right={<span style={{ fontSize: 12, color: 'var(--text-muted)' }}>지도 클릭 → 새 위치 분석</span>}
-              />
-              <div style={{ padding: '0 0 4px' }}>
-                <KakaoMap
-                  markerPos={markerPos}
-                  onMapClick={onMapClick}
-                  buildingPolygon={buildingPolygon}
-                  panelLayout={panel_layout}
-                  height={320}
-                />
-              </div>
-            </div>
-
             {/* 월별 발전량 */}
             <div className="card card-accent">
               <SectionHeader title="📊 월별 예상 발전량" badge="분석 완료" />
