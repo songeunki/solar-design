@@ -108,6 +108,19 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     const W = containerRef.current.clientWidth  || 620;
     const H = 480;
 
+    // ── 폴리곤 존재 여부 + 실제 크기 계산 (카메라 위치 결정) ───────────
+    const osmPolygon = building.polygon; // [[lon, lat], ...] or null
+
+    let effectiveDmax = Dmax;
+    if (osmPolygon && osmPolygon.length >= 3) {
+      const xs = osmPolygon.map(([lng])    => (lng  - center_lng) * mPerDegLng);
+      const zs = osmPolygon.map(([, plat]) => (plat - center_lat) * M_PER_DEG_LAT);
+      const pDX = Math.max(...xs) - Math.min(...xs);
+      const pDZ = Math.max(...zs) - Math.min(...zs);
+      // 10~60m 범위로 클램프 (비정상 폴리곤 방어)
+      effectiveDmax = Math.max(10, Math.min(Math.max(pDX, pDZ), 60));
+    }
+
     // ── Renderer ───────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
@@ -123,7 +136,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
 
     // ── Camera ─────────────────────────────────────────────────────────
     const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, captureRadiusM * 8);
-    camera.position.set(Dmax * 1.1, bH + 18, Dmax * 1.6);
+    camera.position.set(effectiveDmax * 1.1, bH + 18, effectiveDmax * 1.6);
     camera.lookAt(0, bH * 0.5, 0);
     cameraRef.current = camera;
 
@@ -133,7 +146,7 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     controls.enableDamping  = true;
     controls.dampingFactor  = 0.08;
     controls.minDistance    = 8;
-    controls.maxDistance    = captureRadiusM * 3;  // 위성 커버리지만큼 패닝 가능
+    controls.maxDistance    = captureRadiusM * 3;
     controls.maxPolarAngle  = Math.PI / 2 - 0.04;
     controlsRef.current = controls;
 
@@ -169,29 +182,32 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     scene.add(grid);
 
     // ── 건물 본체 ─────────────────────────────────────────────────────
-    // OSM 폴리곤이 있으면 ExtrudeGeometry로 실제 모양, 없으면 직사각형 박스 폴백
+    // OSM 폴리곤 있으면 ExtrudeGeometry(실제 모양), 없으면 직사각형 박스 폴백
     const buildingGroup = new THREE.Group();
-    const osmPolygon    = building.polygon; // [[lon, lat], ...] or null
 
     if (osmPolygon && osmPolygon.length >= 3) {
-      // 실제 건물 폴리곤 기반 3D 모델
-      // shape XY: x=동서(경도), y=남북(위도) → rotateX(-π/2) 후 XZ 지면, Y=위
-      const pts2D = osmPolygon.map(([lng, lat]) => new THREE.Vector2(
-        (lng - center_lng) * mPerDegLng,
-        (lat - center_lat) * M_PER_DEG_LAT,
+      // 실제 건물 폴리곤: shape XY(x=동서, y=남북) → mesh.rotation.x=-π/2 로 세움
+      // ★ geometry.rotateX() 는 노멀을 갱신하지 않아 조명이 뒤집힘 → mesh rotation 사용
+      const pts2D = osmPolygon.map(([lng, plat]) => new THREE.Vector2(
+        (lng  - center_lng) * mPerDegLng,
+        (plat - center_lat) * M_PER_DEG_LAT,
       ));
       const shape  = new THREE.Shape(pts2D);
       const extGeo = new THREE.ExtrudeGeometry(shape, { depth: bH, bevelEnabled: false });
-      extGeo.rotateX(-Math.PI / 2); // XY→XZ(지면), +Z(extrude)→+Y(위)
-      const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
+      // DoubleSide: CCW/CW 권선 방향에 무관하게 양면 렌더링
+      const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0, side: THREE.DoubleSide });
       const bldMesh = new THREE.Mesh(extGeo, bldMat);
+      bldMesh.rotation.x    = -Math.PI / 2;  // ★ mesh 회전: shape XY→XZ(지면), depth(Z)→Y(위)
       bldMesh.castShadow    = true;
       bldMesh.receiveShadow = true;
       buildingGroup.add(bldMesh);
-      buildingGroup.add(new THREE.LineSegments(
+      // 엣지라인도 같은 회전 적용
+      const edgeMesh = new THREE.LineSegments(
         new THREE.EdgesGeometry(extGeo),
         new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.35 }),
-      ));
+      );
+      edgeMesh.rotation.x = -Math.PI / 2;
+      buildingGroup.add(edgeMesh);
     } else {
       // 폴백: 직사각형 박스 + 방위각 회전
       buildingGroup.rotation.y = (azimuthDeg - 180) * DEG;
@@ -338,7 +354,12 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
 
       let panelY, rotX, mat;
 
-      if (effectiveRoofShape === 'flat') {
+      if (osmPolygon && osmPolygon.length >= 3) {
+        // ★ 폴리곤 건물: 항상 평지붕 처리 — 건물 상단(bH) + 0.1 오프셋
+        panelY = bH + 0.1;
+        rotX   = tiltRad;
+        mat    = p.status === 'shade' ? matShade : matActive;
+      } else if (effectiveRoofShape === 'flat') {
         // 평지붕: 남단 하면이 bH에 닿도록 Y 오프셋
         panelY = bH + (PANEL_PH / 2) * Math.sin(tiltRad) + THICK / 2;
         rotX   = tiltRad;
