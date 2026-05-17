@@ -100,13 +100,11 @@ class RegulationAPI:
             result.errors.append("LURIS_API_KEY 미설정")
             return
         try:
-            params = {
-                "serviceKey": LURIS_API_KEY,
-                "pnu":        pnu,
-                "numOfRows":  10,
-                "pageNo":     1,
-            }
-            resp = requests.get(LURIS_URL, params=params, timeout=15)
+            url = (
+                f"{LURIS_URL}?serviceKey={LURIS_API_KEY}"
+                f"&pnu={pnu}&numOfRows=10&pageNo=1"
+            )
+            resp = requests.get(url, timeout=15)
 
             # 디버그: 실제 요청 URL + 응답 상태 + 응답 앞부분
             warnings.warn(
