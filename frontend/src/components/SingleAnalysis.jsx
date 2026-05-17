@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+﻿import { useState, useRef, useCallback } from 'react';
 import AddressInput from './AddressInput';
 import ProgressBar from './ProgressBar';
 import ResultTabs from './ResultTabs';
@@ -65,7 +65,7 @@ export default function SingleAnalysis({ onResultChange }) {
         }
         setStatus('done');
         setStep(5);
-        setMessage('분析 완료!');
+        setMessage('분석 완료!');
         onResultChange?.(true);
       } else if (msg.type === 'error') {
         setErrorMsg(msg.message || '알 수 없는 오류가 발생했습니다.');
@@ -105,7 +105,7 @@ export default function SingleAnalysis({ onResultChange }) {
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <i className="fa-solid fa-magnifying-glass"></i>
-              <span>분析 시작</span>
+              <span>분석 시작</span>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <div className="modal-body">
@@ -122,11 +122,11 @@ export default function SingleAnalysis({ onResultChange }) {
             <div className="welcome-icon-wrap">
               <i className="fa-solid fa-solar-panel"></i>
             </div>
-            <h1 className="welcome-title">AI 태양광 입지 분析</h1>
-            <p className="welcome-sub">주소 하나로 수익성, 설계, 규제까지 자동 분析</p>
+            <h1 className="welcome-title">AI 태양광 입지 분석</h1>
+            <p className="welcome-sub">주소 하나로 수익성, 설계, 규제까지 자동 분석</p>
             <button className="btn-start-analysis" onClick={() => setShowModal(true)}>
               <i className="fa-solid fa-magnifying-glass"></i>
-              분析 시작하기
+              분석 시작하기
             </button>
           </div>
         </div>

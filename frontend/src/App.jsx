@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import './index.css';
 import './App.css';
 import SingleAnalysis from './components/SingleAnalysis';
@@ -42,14 +42,14 @@ export default function App() {
             className={`header-tab ${mode === 'compare' ? 'active' : ''}`}
             onClick={() => { setMode('compare'); handleReset(); }}
           >
-            <i className="fa-solid fa-code-compare"></i> 비교 분析
+            <i className="fa-solid fa-code-compare"></i> 비교 분석
           </button>
         </div>
 
         <div className="header-right">
           {hasResult && (
             <button className="btn-new-analysis" onClick={handleReset}>
-              <i className="fa-solid fa-rotate"></i> 새 분析
+              <i className="fa-solid fa-rotate"></i> 새 분석
             </button>
           )}
           <a href="/admin" className="btn-admin" title="관리자 설정">
