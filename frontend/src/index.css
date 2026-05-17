@@ -683,6 +683,140 @@ body {
 .alert-error   { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
 .alert-success { background: var(--green-light); border: 1px solid rgba(46,204,113,0.3); color: #276749; }
 
+/* ===== 프로그레스바 (다크 모던) ===== */
+
+/* 로딩 화면 — 카드 수직 중앙 정렬 */
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: calc(100vh - var(--header-height) - 80px);
+  padding: 40px 24px;
+}
+
+.progress-card {
+  background: var(--bg-card, #1A2535);
+  border: 1px solid var(--border-color, #2A3F5F);
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* 연결선 오버라이드 */
+.progress-card .progress-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.progress-card .progress-steps::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--border-color, #2A3F5F);
+  z-index: 0;
+}
+
+.progress-card .progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 1;
+  position: relative;
+}
+
+.step-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  border: 2px solid var(--border-color, #2A3F5F);
+  background: var(--bg-card, #1A2535);
+  color: var(--text-secondary, #8899AA);
+  transition: all 0.3s ease;
+}
+
+.step-icon-wrap .fa-solid { margin-right: 0; color: inherit; }
+
+.progress-card .progress-step.done .step-icon-wrap {
+  background: var(--accent-green, #00E676);
+  border-color: var(--accent-green, #00E676);
+  color: #000;
+  box-shadow: 0 0 12px rgba(0,230,118,0.4);
+}
+
+.progress-card .progress-step.active .step-icon-wrap {
+  background: var(--accent-blue, #00B4D8);
+  border-color: var(--accent-blue, #00B4D8);
+  color: #fff;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+.progress-card .progress-step.pending .step-icon-wrap {
+  opacity: 0.4;
+}
+
+.step-label {
+  font-size: 11px;
+  color: var(--text-secondary, #8899AA);
+  white-space: nowrap;
+}
+
+.progress-card .progress-step.done .step-label,
+.progress-card .progress-step.active .step-label {
+  color: #fff;
+  font-weight: 600;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(0,180,216,0.5); }
+  50%       { box-shadow: 0 0 28px rgba(0,180,216,0.9); }
+}
+
+/* 진행 바 오버라이드 */
+.progress-card .progress-bar-track {
+  height: 6px;
+  background: var(--border-color, #2A3F5F);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.progress-card .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00B4D8, #00E676);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 8px rgba(0,180,216,0.5);
+}
+
+/* 상태 텍스트 오버라이드 */
+.progress-card .progress-status-text {
+  font-size: 13px;
+  color: var(--accent-blue, #00B4D8);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-card .progress-status-text .fa-spinner {
+  animation: spin 1s linear infinite;
+}
+
+.progress-card .progress-status-text .fa-solid { margin-right: 0; color: inherit; }
+
 /* ===== 한전 계통연계 섹션 ===== */
 .kepco-guide-card {
   background: #ebf8ff;
@@ -1068,8 +1202,8 @@ body {
 
 .modal-body label { color: #8899AA !important; }
 
-/* ===== 로딩 / 에러 스크린 ===== */
-.loading-screen, .error-screen {
+/* ===== 에러 스크린 ===== */
+.error-screen {
   max-width: 720px;
   margin: 48px auto;
   padding: 0 24px;

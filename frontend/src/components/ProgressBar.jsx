@@ -6,48 +6,53 @@
  */
 
 const STEPS = [
-  { label: '주소 변환', icon: '📍' },
-  { label: '건물 정보', icon: '🏢' },
-  { label: '일사량 수집', icon: '🌤️' },
-  { label: '지붕 분석',  icon: '📐' },
-  { label: '설계 완료',  icon: '✅' },
+  { icon: 'fa-solid fa-location-dot', label: '주소 조회' },
+  { icon: 'fa-solid fa-building',     label: '건물 정보' },
+  { icon: 'fa-solid fa-cloud-sun',    label: '기상 데이터' },
+  { icon: 'fa-solid fa-solar-panel',  label: '설계 분석' },
+  { icon: 'fa-solid fa-chart-line',   label: '완료' },
 ];
 
 export default function ProgressBar({ step = 0, message = '분석을 시작합니다...' }) {
   const pct = Math.round((step / STEPS.length) * 100);
 
+  const getStepState = (i) =>
+    i < step ? 'done' : i === step ? 'active' : 'pending';
+
   return (
-    <div className="progress-wrapper">
-      {/* 단계 표시 */}
+    <div className="progress-card">
+      {/* 단계 아이콘 */}
       <div className="progress-steps">
         {STEPS.map((s, i) => {
-          const status =
-            i < step ? 'done' : i === step ? 'active' : 'pending';
+          const state = getStepState(i);
           return (
-            <div key={i} className={`progress-step ${status}`}>
-              <div className="progress-step-circle">
-                {status === 'done' ? '✓' : status === 'active' ? s.icon : i + 1}
+            <div key={i} className={`progress-step ${state}`}>
+              <div className="step-icon-wrap">
+                {state === 'done'
+                  ? <i className="fa-solid fa-check"></i>
+                  : state === 'active'
+                  ? <i className={`${s.icon} fa-beat`}></i>
+                  : <i className={s.icon}></i>
+                }
               </div>
-              <div className="progress-step-label">{s.label}</div>
+              <span className="step-label">{s.label}</span>
             </div>
           );
         })}
       </div>
 
-      {/* 바 */}
+      {/* 진행 바 */}
       <div className="progress-bar-track">
         <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
       </div>
 
       {/* 상태 텍스트 */}
       <div className="progress-status-text">
-        {step < STEPS.length && <span className="spinner" />}
+        {step < STEPS.length && (
+          <i className="fa-solid fa-spinner"></i>
+        )}
         <span>{message}</span>
-        <span
-          style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--blue)' }}
-        >
-          {pct}%
-        </span>
+        <span style={{ marginLeft: 'auto', fontWeight: 700 }}>{pct}%</span>
       </div>
     </div>
   );
