@@ -1072,13 +1072,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: calc(100dvh - var(--header-height, 56px));
-  overflow: hidden;
-  padding: 40px 24px;
-  padding-top: 16px;
+  min-height: calc(100dvh - var(--header-height, 72px));
+  padding: 0;
 }
 
-.welcome-hero { text-align: center; max-width: 520px; }
+.welcome-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 520px;
+}
 
 .welcome-icon-wrap {
   width: 96px;
@@ -1396,8 +1403,8 @@ body {
   .app-main-dark { padding-top: calc(100px + 16px); }
 
   /* 2. 웰컴 스크린 */
-  .welcome-screen      { padding: 16px; height: calc(100dvh - 100px); }
-  .welcome-hero        { gap: 12px; }
+  .welcome-screen      { padding: 0 16px; min-height: calc(100dvh - 116px); }
+  .welcome-hero        { gap: 12px; padding: 0 16px; }
   .welcome-icon-wrap   { width: 72px; height: 72px; font-size: 30px; }
   .welcome-title       { font-size: 22px; }
   .welcome-sub         { font-size: 14px; margin-bottom: 24px; }
