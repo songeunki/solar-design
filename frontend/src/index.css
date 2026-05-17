@@ -1397,9 +1397,9 @@ body {
   .welcome-sub         { font-size: 14px; margin-bottom: 24px; }
   .btn-start-analysis  { width: 100%; padding: 14px; font-size: 15px; justify-content: center; }
 
-  /* 3. 모달 — 하단 슬라이드업 */
-  .modal-overlay { align-items: flex-end; padding: 0; }
-  .modal-box     { width: 100%; max-width: none; border-radius: 16px 16px 0 0; margin: 0; }
+  /* 3. 모달 — 중앙 정렬 */
+  .modal-overlay { align-items: center; padding: 16px; }
+  .modal-box     { width: 100%; max-width: 100%; border-radius: 16px; height: auto; max-height: 90vh; }
   .modal-body    { padding: 16px; }
 
   /* 4. KPI 바 */
