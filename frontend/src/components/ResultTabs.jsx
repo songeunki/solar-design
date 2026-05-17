@@ -533,7 +533,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
             <div className="card card-accent">
               <SectionHeader
                 title="🤖 Claude AI 종합 평가"
-                right={<span className="badge badge-blue">claude-sonnet-4-6</span>}
+                right={<span className="badge badge-blue">Gemini 1.5 Flash</span>}
               />
               <div style={{ padding: '16px 24px 20px' }}>
 

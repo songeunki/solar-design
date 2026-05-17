@@ -1,12 +1,18 @@
-"""AI 종합 평가 — Claude API 스트리밍 연동."""
+"""AI 종합 평가 — Gemini API 스트리밍 연동."""
 from __future__ import annotations
+import asyncio
 import json
+import requests as _req
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter(tags=["ai"])
 
+_GEMINI_STREAM_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-1.5-flash:streamGenerateContent?alt=sse&key={key}"
+)
 
 # ── 요청 모델 ─────────────────────────────────────────────────────────────────
 
@@ -37,7 +43,6 @@ def _build_prompt(req: AiEvaluateRequest) -> str:
     f  = req.financial
     md = req.monthly_data
 
-    # 월별 발전량 요약
     monthly_str = ""
     if md:
         items = [
@@ -89,60 +94,99 @@ def _build_prompt(req: AiEvaluateRequest) -> str:
 시공·법규·유지보수 관련 실무 주의사항 2~4가지를 `- ` bullet으로 작성."""
 
 
+# ── Gemini 스트리밍 (동기, 스레드 풀에서 실행) ─────────────────────────────────
+
+def _iter_gemini_chunks(prompt: str, api_key: str):
+    """Gemini SSE 스트림을 동기적으로 이터레이션, 텍스트 청크 yield."""
+    url = _GEMINI_STREAM_URL.format(key=api_key)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": 1800,
+            "temperature":     0.7,
+        },
+        "systemInstruction": {
+            "parts": [{
+                "text": (
+                    "당신은 대한민국 태양광 발전 투자 전문가입니다. "
+                    "간결하고 실용적인 평가를 제공합니다. "
+                    "숫자는 구체적으로 언급하고, 불필요한 서론은 생략합니다."
+                )
+            }]
+        },
+    }
+
+    with _req.post(url, json=payload, stream=True, timeout=90) as resp:
+        resp.raise_for_status()
+        for raw_line in resp.iter_lines():
+            if not raw_line:
+                continue
+            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+            if not line.startswith("data: "):
+                continue
+            data_str = line[6:].strip()
+            if not data_str or data_str == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(data_str)
+                text = (
+                    chunk.get("candidates", [{}])[0]
+                         .get("content", {})
+                         .get("parts", [{}])[0]
+                         .get("text", "")
+                )
+                if text:
+                    yield text
+            except (json.JSONDecodeError, IndexError, KeyError):
+                pass
+
+
 # ── 엔드포인트 ────────────────────────────────────────────────────────────────
 
 @router.post("/api/ai-evaluate")
 async def ai_evaluate(req: AiEvaluateRequest):
-    """Claude API로 태양광 입지 종합 평가 (SSE 스트리밍)."""
-    from config import ANTHROPIC_API_KEY
-    if not ANTHROPIC_API_KEY:
+    """Gemini 1.5 Flash로 태양광 입지 종합 평가 (SSE 스트리밍)."""
+    from config import GEMINI_API_KEY
+    if not GEMINI_API_KEY:
         raise HTTPException(
             status_code=503,
             detail=(
-                "ANTHROPIC_API_KEY가 설정되지 않았습니다. "
-                "Railway 환경변수에 ANTHROPIC_API_KEY를 추가해주세요."
+                "GEMINI_API_KEY가 설정되지 않았습니다. "
+                "Railway 환경변수에 GEMINI_API_KEY를 추가해주세요."
             ),
         )
 
-    try:
-        import anthropic as _anthropic
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="anthropic 패키지가 설치되지 않았습니다. 서버를 재배포해주세요.",
-        )
+    prompt   = _build_prompt(req)
+    api_key  = GEMINI_API_KEY
+    # thread-safe queue: Gemini 동기 I/O → async generator로 전달
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    loop  = asyncio.get_event_loop()
 
-    client = _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    prompt = _build_prompt(req)
+    def _producer():
+        """스레드 풀: Gemini 청크를 queue에 push."""
+        try:
+            for text in _iter_gemini_chunks(prompt, api_key):
+                loop.call_soon_threadsafe(queue.put_nowait, text)
+        except _req.exceptions.HTTPError as exc:
+            msg = f"Gemini API 오류 ({exc.response.status_code}): {exc.response.text[:200]}"
+            loop.call_soon_threadsafe(queue.put_nowait, f"\n\n⚠️ {msg}")
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, f"\n\n⚠️ 오류: {exc}")
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+
+    asyncio.get_event_loop().run_in_executor(None, _producer)
 
     async def event_stream():
-        try:
-            with client.messages.stream(
-                model="claude-sonnet-4-6",
-                max_tokens=1800,
-                system=(
-                    "당신은 대한민국 태양광 발전 투자 전문가입니다. "
-                    "간결하고 실용적인 평가를 제공합니다. "
-                    "숫자는 구체적으로 언급하고, 불필요한 서론은 생략합니다."
-                ),
-                messages=[{"role": "user", "content": prompt}],
-            ) as stream:
-                for text in stream.text_stream:
-                    yield f"data: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
-
-        except _anthropic.AuthenticationError:
-            yield f"data: {json.dumps({'error': 'API 인증 오류: ANTHROPIC_API_KEY를 확인하세요.'}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
-        except Exception as exc:
-            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
+        while True:
+            item = await queue.get()
+            if item is None:
+                yield "data: [DONE]\n\n"
+                break
+            yield f"data: {json.dumps({'text': item}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control":    "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
