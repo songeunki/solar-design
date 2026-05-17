@@ -140,18 +140,6 @@ class PanelLayoutEngine:
         row_count = max(1, int(avail_ns / row_spacing_m))   # NS 장변 → 행(많음)
         col_count = max(1, int(avail_ew / col_spacing_m))   # EW 단변 → 열(적음)
 
-        # ── [DEBUG] ───────────────────────────────────────────────────────
-        print(
-            f"[PanelLayout] footprint={footprint:.0f}㎡ "
-            f"EW={building_ew_m:.2f}m(단변) NS={building_ns_m:.2f}m(장변) | "
-            f"avail EW={avail_ew:.2f}m NS={avail_ns:.2f}m | "
-            f"grid={row_count}행(NS)×{col_count}열(EW) | "
-            f"row_sp={row_spacing_m:.3f}m col_sp={col_spacing_m:.3f}m | "
-            f"PANEL_W(EW)={PANEL_W}m PANEL_H(NS)={PANEL_H}m | "
-            f"azimuth={azimuth_deg}°",
-            flush=True,
-        )
-
         # ── 6. 단위 발전량 ────────────────────────────────────────────────
         total         = row_count * col_count
         base          = target_panel_count if (target_panel_count and target_panel_count > 0) else total
@@ -229,53 +217,6 @@ class PanelLayoutEngine:
                     status=status, kwh_year=kwh_val,
                     corners=corners,
                 ))
-
-        # ── [DEBUG] 핵심 값 출력 ─────────────────────────────────────────
-        print(f"[PL] center: {lat:.6f}, {lng:.6f}", flush=True)
-        print(f"[PL] building_ew_m(동서): {building_ew_m:.2f}, building_ns_m(남북): {building_ns_m:.2f}", flush=True)
-        print(f"[PL] azimuth_deg: {azimuth_deg}, rot_rad: {rot_rad:.4f}", flush=True)
-        if panels and panels[0].corners and len(panels[0].corners) == 4:
-            p0c = panels[0].corners
-            sw, se, ne, nw = p0c[0], p0c[1], p0c[2], p0c[3]
-            print("[PL] 첫번째 패널 4꼭짓점 (SW→SE=동쪽lng증가, SE→NE=북쪽lat증가 가 정상):", flush=True)
-            print(f"  SW: lat={sw['lat']:.7f}, lng={sw['lng']:.7f}", flush=True)
-            print(f"  SE: lat={se['lat']:.7f}, lng={se['lng']:.7f}", flush=True)
-            print(f"  NE: lat={ne['lat']:.7f}, lng={ne['lng']:.7f}", flush=True)
-            print(f"  NW: lat={nw['lat']:.7f}, lng={nw['lng']:.7f}", flush=True)
-            # EW폭 = SW→SE 경도차, NS높이 = SE→NE 위도차
-            ew_m = (se['lng'] - sw['lng']) * m_lng
-            ns_m = (ne['lat'] - se['lat']) * M_PER_DEG_LAT
-            orient = "landscape(EW장변)✓" if ew_m > ns_m else "portrait(NS장변)⚠️"
-            print(f"[PL] 단일패널 EW={ew_m:.3f}m(SW→SE경도차) NS={ns_m:.3f}m(SE→NE위도차) → {orient}", flush=True)
-            print(f"[PL] 참고: SE.lng==NE.lng({se['lng']:.7f}=={ne['lng']:.7f}) 는 정상 — 둘 다 동쪽변", flush=True)
-        if len(panels) > 1 and panels[1].corners:
-            sw0 = panels[0].corners[0]
-            sw1 = panels[1].corners[0]
-            delta_ew = (sw1['lng'] - sw0['lng']) * m_lng
-            delta_ns = (sw1['lat'] - sw0['lat']) * M_PER_DEG_LAT
-            print(f"[PL] panels[0]→panels[1] SW 델타: δEW={delta_ew:.3f}m δNS={delta_ns:.3f}m", flush=True)
-            print(f"  (col_spacing={col_spacing_m:.3f}m 이면 δEW≈{col_spacing_m:.3f} 가 정상)", flush=True)
-
-        # ── [DEBUG] 방향 검증 ─────────────────────────────────────────────
-        visible = [p for p in panels if p.status != "buffer"]
-        if visible:
-            p0, pN = visible[0], visible[-1]
-            dlat_m = abs(pN.lat - p0.lat) * M_PER_DEG_LAT
-            dlng_m = abs(pN.lng - p0.lng) * m_lng
-            grid_orient = "동서(가로)✓" if dlng_m >= dlat_m else "남북(세로)⚠️"
-            print(
-                f"[PanelLayout] 배열범위 δEW={dlng_m:.1f}m δNS={dlat_m:.1f}m → {grid_orient}",
-                flush=True,
-            )
-            if p0.corners and len(p0.corners) == 4:
-                _sw, _se, _ne = p0.corners[0], p0.corners[1], p0.corners[2]
-                _ew = (_se["lng"] - _sw["lng"]) * m_lng   # SW→SE 경도차 = EW폭
-                _ns = (_ne["lat"] - _se["lat"]) * M_PER_DEG_LAT  # SE→NE 위도차 = NS높이
-                print(
-                    f"[PanelLayout] 단일패널 EW={_ew:.3f}m(SW→SE) NS={_ns:.3f}m(SE→NE) "
-                    f"→ {'가로(landscape)✓' if _ew > _ns else '세로(portrait)⚠️'}",
-                    flush=True,
-                )
 
         # ── 10. 지붕 윤곽 폴리곤 (회전 포함) ─────────────────────────────
         if not roof_polygon:
