@@ -1,13 +1,9 @@
 """용도지역·토지특성 규제 분석."""
 from __future__ import annotations
-import xml.etree.ElementTree as ET
-import urllib.request
-import urllib.error
 import requests
 from dataclasses import dataclass, field
-from config import LURIS_API_KEY, VWORLD_LAND_API_KEY
+from config import VWORLD_LAND_API_KEY
 
-LURIS_URL       = "https://apis.data.go.kr/1613000/arLandUseInfoService/DTarLandUseInfo"
 VWORLD_LAND_URL = "https://api.vworld.kr/ned/data/getLandCharacteristics"
 
 _ZONE_RULES: dict[str, tuple[str, str]] = {
@@ -35,6 +31,24 @@ _ZONE_RULES: dict[str, tuple[str, str]] = {
 }
 
 _FEASIBILITY_ORDER = {"불가": 3, "조건부": 2, "가능": 1, "확인불가": 0}
+
+_PURPOSE_ZONE_MAP: dict[str, str] = {
+    "단독주택":           "제1종일반주거지역",
+    "다가구주택":         "제1종일반주거지역",
+    "연립주택":           "제2종일반주거지역",
+    "다세대주택":         "제2종일반주거지역",
+    "공동주택":           "제2종일반주거지역",
+    "아파트":             "제3종일반주거지역",
+    "제1종근린생활시설":  "근린상업지역",
+    "제2종근린생활시설":  "근린상업지역",
+    "판매시설":           "일반상업지역",
+    "업무시설":           "일반상업지역",
+    "숙박시설":           "일반상업지역",
+    "공장":               "일반공업지역",
+    "창고시설":           "일반공업지역",
+    "농가":               "농림지역",
+    "축사":               "농림지역",
+}
 
 _JIMOK_MAP: dict[str, str] = {
     "전": "전(밭)", "답": "답(논)", "과": "과수원",
@@ -82,97 +96,43 @@ class RegulationResult:
 
 
 class RegulationAPI:
-    def fetch(self, address: str, pnu: str | None = None) -> RegulationResult:
+    def fetch(
+        self,
+        address: str,
+        pnu: str | None = None,
+        building_purpose: str = "",
+    ) -> RegulationResult:
         result = RegulationResult(pnu=pnu or "")
+        self._estimate_zone_from_purpose(building_purpose, result)
         if pnu:
-            self._fetch_luris(pnu, result)
             self._fetch_vworld(pnu, result)
         else:
-            result.errors.append("PNU 미확보 — 용도지역 조회 불가")
+            result.errors.append("PNU 미확보 — 토지특성 조회 불가")
         self._assess_risk(result)
         return result
 
-    def _fetch_luris(self, pnu: str, result: RegulationResult) -> None:
-        """LURIS API — XML 응답 파싱."""
-        import warnings
-        from http.client import RemoteDisconnected
-
-        if not LURIS_API_KEY:
-            result.errors.append("LURIS_API_KEY 미설정")
-            return
-        try:
-            url = (
-                f"{LURIS_URL}?serviceKey={LURIS_API_KEY}"
-                f"&pnu={pnu}&numOfRows=10&pageNo=1"
-            )
-            resp = urllib.request.urlopen(url, timeout=15)
-            body = resp.read().decode("utf-8")
-
-            # 디버그: 실제 요청 URL + 응답 상태 + 응답 앞부분
-            warnings.warn(
-                f"[LURIS] PNU={pnu} status={resp.status} url={resp.url}",
-                stacklevel=2,
-            )
-            warnings.warn(
-                f"[LURIS] 응답 앞 500자: {body[:500]}",
-                stacklevel=2,
-            )
-
-            # XML 선언(<?xml ... encoding="UTF-8"?>)을 그대로 str에 넣으면
-            # expat "multi-byte encodings not supported" 에러 발생 → 선언 제거 후 파싱
-            xml_text = body.strip()
-            if xml_text.startswith("<?xml"):
-                xml_text = xml_text[xml_text.index("?>") + 2:].lstrip()
-            root = ET.fromstring(xml_text or "<response/>")
-        except (urllib.error.URLError, RemoteDisconnected, OSError) as e:
-            result.errors.append(f"외부 API 일시적 오류 (Railway 네트워크 불안정): {e}")
-            return
-        except Exception as e:
-            result.errors.append(f"LURIS 조회 실패: {e}")
+    def _estimate_zone_from_purpose(self, building_purpose: str, result: RegulationResult) -> None:
+        """건물 용도(mainPurpsCdNm) 기반 용도지역 추정."""
+        if not building_purpose:
+            result.zone_feasibility = "확인불가"
+            result.zone_note        = "건물 용도 정보 없음 — 용도지역 추정 불가"
             return
 
-        # 에러 코드 확인
-        result_code = root.findtext("./header/resultCode") or ""
-        if result_code not in ("00", "0000", ""):
-            result_msg = root.findtext("./header/resultMsg") or ""
-            result.errors.append(f"LURIS 오류 (resultCode={result_code}): {result_msg}")
-            return
+        zone = _PURPOSE_ZONE_MAP.get(building_purpose)
+        if zone is None:
+            for key, z in _PURPOSE_ZONE_MAP.items():
+                if key in building_purpose:
+                    zone = z
+                    break
 
-        items_el = root.findall("./body/items/item")
-        if not items_el:
-            result.errors.append("LURIS 용도지역 데이터 없음")
-            return
-
-        zones_set: set[str]    = set()
-        restrictions: list[str] = []
-
-        for item in items_el:
-            dtype   = (item.findtext("prposAreaDstrcNm") or "").strip()
-            area_nm = (item.findtext("prposAreaNm")      or "").strip()
-            if not area_nm:
-                continue
-            if dtype == "용도지역":
-                zones_set.add(area_nm)
-            else:
-                restrictions.append(area_nm)
-
-        result.zones        = sorted(zones_set)
-        result.restrictions = list(dict.fromkeys(restrictions))
-
-        best      = "확인불가"
-        best_note = ""
-        for zone in result.zones:
+        if zone:
+            result.zones = [zone]
             feasibility, note = _ZONE_RULES.get(zone, ("조건부", f"{zone} — 개별 확인 필요"))
-            if _FEASIBILITY_ORDER.get(feasibility, 0) > _FEASIBILITY_ORDER.get(best, 0):
-                best      = feasibility
-                best_note = note
-
-        if result.zones:
-            result.zone_feasibility = best if best != "확인불가" else "조건부"
-            result.zone_note        = best_note or f"{result.zones[0]} — 개별 확인 필요"
+            result.zone_feasibility = feasibility
+            result.zone_note        = f"{note} (건물 용도 '{building_purpose}' 기반 추정)"
         else:
             result.zone_feasibility = "확인불가"
-            result.zone_note        = "용도지역 데이터 없음"
+            result.zone_note        = f"건물 용도 '{building_purpose}' — 용도지역 추정 불가"
 
     def _fetch_vworld(self, pnu: str, result: RegulationResult) -> None:
         """V-World NED 토지특성 API — JSON 응답 파싱."""

@@ -118,8 +118,9 @@ def run_pipeline(
     regulation = None
     try:
         from data_collector.regulation_api import RegulationAPI
-        _pnu = building.extra.get("pnu")
-        regulation = RegulationAPI().fetch(address, pnu=_pnu).to_dict()
+        _pnu     = building.extra.get("pnu")
+        _purpose = building.extra.get("purpose", "")
+        regulation = RegulationAPI().fetch(address, pnu=_pnu, building_purpose=_purpose).to_dict()
     except Exception:
         pass
 
