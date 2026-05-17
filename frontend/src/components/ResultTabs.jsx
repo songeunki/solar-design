@@ -532,7 +532,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card card-accent">
               <SectionHeader
-                title="🤖 Claude AI 종합 평가"
+                title="🤖 AI 종합 평가"
                 right={<span className="badge badge-blue">Gemini 2.5 Flash</span>}
               />
               <div style={{ padding: '16px 24px 20px' }}>
@@ -556,7 +556,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   <button className="btn btn-primary"
                     style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 700, borderRadius: 10 }}
                     onClick={generateAi}>
-                    🤖 Claude AI로 종합 평가 생성
+                    🤖 AI 종합 평가 생성
                   </button>
                 )}
 
@@ -564,7 +564,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                 {aiState === 'loading' && (
                   <div style={{ textAlign: 'center', padding: '44px 0', color: 'var(--text-muted)' }}>
                     <span className="spinner" style={{ width: 28, height: 28, display: 'inline-block', marginBottom: 14 }} />
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>Claude AI가 분석 중입니다…</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>AI가 분석 중입니다…</div>
                     <div style={{ fontSize: 12, marginTop: 4 }}>입지·재무·설계 데이터를 종합 평가합니다</div>
                   </div>
                 )}
