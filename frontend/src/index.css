@@ -1356,3 +1356,103 @@ body {
   .header-center { display: none; }
   .header-badge-dark { display: none; }
 }
+
+/* ══════════════════════════════════════
+   모바일 반응형 최적화 추가 (≤ 767px)
+══════════════════════════════════════ */
+@media (max-width: 767px) {
+  /* 1. 헤더 — 탭을 두 번째 행으로 */
+  .app-header-dark {
+    padding: 0 12px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--header-height);
+    gap: 0;
+  }
+  .header-center {
+    display: flex;                           /* 숨기기 해제 */
+    order: 3;
+    width: 100%;
+    border-top: 1px solid var(--border-color);
+    padding: 4px 0;
+  }
+  .header-tab {
+    flex: 1;
+    font-size: 12px;
+    padding: 8px 4px;
+    justify-content: center;
+  }
+  .header-left .header-title { font-size: 14px; }
+  .header-badge-dark          { display: none; }
+
+  /* 헤더 두 줄 → 본문 패딩 증가 */
+  .app-main-dark { padding-top: 100px; }
+
+  /* 2. 웰컴 스크린 */
+  .welcome-screen      { padding: 20px 16px; }
+  .welcome-icon-wrap   { width: 72px; height: 72px; font-size: 30px; }
+  .welcome-title       { font-size: 22px; }
+  .welcome-sub         { font-size: 14px; margin-bottom: 24px; }
+  .btn-start-analysis  { width: 100%; padding: 14px; font-size: 15px; justify-content: center; }
+
+  /* 3. 모달 — 하단 슬라이드업 */
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-box     { width: 100%; max-width: none; border-radius: 16px 16px 0 0; margin: 0; }
+  .modal-body    { padding: 16px; }
+
+  /* 4. KPI 바 */
+  .dashboard-kpi-bar { padding: 4px; }
+  .dashboard-kpi-card { padding: 12px; }
+
+  /* 5. 대시보드 바디 */
+  .dashboard-body   { grid-template-columns: 1fr; }
+  .dashboard-layout { gap: 10px; }
+  .dashboard-map    { flex-shrink: 0; }
+  .dashboard-map .map-wrapper { height: 250px !important; }
+  .dashboard-tabs   { max-height: none; }
+
+  /* 6. 탭 가로 스크롤 */
+  .result-tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    white-space: nowrap;
+    display: flex;
+  }
+  .result-tab-bar::-webkit-scrollbar { display: none; }
+  .result-tab-btn {
+    flex-shrink: 0;
+    font-size: 12px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  /* 7. 결과 카드 */
+  .compare-grid         { grid-template-columns: 1fr; }
+  .info-row-value       { word-break: break-all; font-size: 13px; }
+  .section-header       { padding: 12px 14px 10px; }
+  .result-main-grid     { grid-template-columns: 1fr; }
+
+  /* 8. 다운로드 버튼 */
+  .download-bar   { flex-direction: column; gap: 8px; }
+  .download-bar a { width: 100%; justify-content: center; text-align: center; }
+}
+
+/* ══════════════════════════════════════
+   태블릿 전용 (768px – 1279px)
+══════════════════════════════════════ */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .dashboard-kpi-bar { grid-template-columns: repeat(4, 1fr); }
+  .dashboard-body    { grid-template-columns: 40% 1fr; }
+}
+
+/* ══════════════════════════════════════
+   터치 UX 개선
+══════════════════════════════════════ */
+.dashboard-tabs { -webkit-overflow-scrolling: touch; }
+
+@media (hover: none) {
+  .dashboard-kpi-card:hover { transform: none; }
+  .result-tab-btn:hover     { background: transparent; color: #8899AA; }
+  .btn-start-analysis:hover { transform: none; }
+}
