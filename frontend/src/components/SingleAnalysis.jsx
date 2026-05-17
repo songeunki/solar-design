@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback } from 'react';
+﻿import { useState, useRef, useCallback, useEffect } from 'react';
 import AddressInput from './AddressInput';
 import ProgressBar from './ProgressBar';
 import ResultTabs from './ResultTabs';
@@ -7,6 +7,12 @@ import KakaoMap from './KakaoMap';
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
 export default function SingleAnalysis({ onResultChange }) {
+  const [headerH, setHeaderH] = useState(100);
+  useEffect(() => {
+    const header = document.querySelector('.app-header-dark');
+    if (header) setHeaderH(header.offsetHeight);
+  }, []);
+
   const [showModal, setShowModal]         = useState(false);
   const [status, setStatus]               = useState('idle');
   const [step, setStep]                   = useState(0);
@@ -121,7 +127,7 @@ export default function SingleAnalysis({ onResultChange }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: 'calc(100dvh - 100px)',
+          height: `calc(100dvh - ${headerH}px)`,
           width: '100%',
         }}>
           <div style={{
