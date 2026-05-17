@@ -1,28 +1,27 @@
 import { useState, useRef, useCallback } from 'react';
 import AddressInput from './AddressInput';
 import ProgressBar from './ProgressBar';
-import ResultCards from './ResultCards';
+import ResultTabs from './ResultTabs';
 import KakaoMap from './KakaoMap';
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
 export default function SingleAnalysis() {
-  const [status, setStatus] = useState('idle');
-  const [step, setStep] = useState(0);
-  const [message, setMessage] = useState('');
-  const [result, setResult] = useState(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [markerPos, setMarkerPos] = useState(null);
+  const [status, setStatus]               = useState('idle');
+  const [step, setStep]                   = useState(0);
+  const [message, setMessage]             = useState('');
+  const [result, setResult]               = useState(null);
+  const [errorMsg, setErrorMsg]           = useState('');
+  const [markerPos, setMarkerPos]         = useState(null);
   const [buildingPolygon, setBuildingPolygon] = useState(null);
 
-  const wsRef = useRef(null);
+  const wsRef     = useRef(null);
   const statusRef = useRef(status);
   statusRef.current = status;
 
   const startAnalysis = useCallback(({ address, azimuth_override = null }) => {
     if (statusRef.current === 'loading') return;
 
-    // 이전 WebSocket 정리
     if (wsRef.current && wsRef.current.readyState < 2) {
       wsRef.current.onclose = null;
       wsRef.current.close();
@@ -35,7 +34,6 @@ export default function SingleAnalysis() {
     setErrorMsg('');
     setBuildingPolygon(null);
 
-    // 분석 시작 즉시 Kakao 지오코딩으로 지도 마커 선제 이동
     if (window.kakao?.maps?.services) {
       const geocoder = new window.kakao.maps.services.Geocoder();
       geocoder.addressSearch(address.trim(), (res, st) => {
@@ -56,13 +54,6 @@ export default function SingleAnalysis() {
         setStep(msg.step ?? 0);
         setMessage(msg.message ?? '');
       } else if (msg.type === 'result') {
-        // 디버그: 실제 전달 값 확인
-        console.log('[WS result] building:', msg.data?.building);
-        console.log('[WS result] panel_layout.stats:', msg.data?.panel_layout?.stats);
-        console.log('[WS result] roofShape:', msg.data?.building?.roofShape,
-          '| tilt_deg:', msg.data?.panel_layout?.stats?.tilt_deg,
-          '| azimuth_deg:', msg.data?.panel_layout?.stats?.azimuth_deg,
-          '| archArea:', msg.data?.building?.archArea);
         setResult(msg.data);
         if (msg.data?.lat && msg.data?.lng) {
           setMarkerPos({ lat: msg.data.lat, lng: msg.data.lng });
@@ -92,33 +83,42 @@ export default function SingleAnalysis() {
     };
   }, []);
 
-  return (
-    <div className="analysis-layout">
+  const handleReset = useCallback(() => {
+    setStatus('idle');
+    setResult(null);
+    setMarkerPos(null);
+    setBuildingPolygon(null);
+  }, []);
 
-      {/* ── 사이드바: 입력 패널 + 지도 ── */}
+  const isDone = status === 'done' && result;
+
+  return (
+    <div className={`analysis-layout${isDone ? ' analysis-layout--wide' : ''}`}>
+
+      {/* ── 사이드바: 입력 + 지도(분석 전) ── */}
       <div className="analysis-sidebar">
         <div className="input-panel">
-          <div className="input-panel-title">
-            🏠 단일 건물 태양광 분석
-          </div>
-          <AddressInput
-            onSubmit={startAnalysis}
-            disabled={status === 'loading'}
-          />
+          <div className="input-panel-title">🏠 단일 건물 태양광 분석</div>
+          <AddressInput onSubmit={startAnalysis} disabled={status === 'loading'} />
           <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-            지도를 클릭하면 해당 위치로 바로 분석을 시작합니다
+            {isDone
+              ? '탭 1의 위성지도를 클릭하거나 새 주소를 입력하면 재분석합니다.'
+              : '주소를 입력하거나 지도를 클릭해 분석을 시작하세요'}
           </p>
         </div>
 
-        <KakaoMap
-          markerPos={markerPos}
-          onMapClick={(addr) => startAnalysis({ address: addr })}
-          buildingPolygon={buildingPolygon}
-          panelLayout={status === 'done' ? result?.panel_layout : null}
-        />
+        {/* 분석 전에는 사이드바에 지도 표시 (클릭하여 분석 시작) */}
+        {!isDone && (
+          <KakaoMap
+            markerPos={markerPos}
+            onMapClick={(addr) => startAnalysis({ address: addr })}
+            buildingPolygon={buildingPolygon}
+            panelLayout={null}
+          />
+        )}
       </div>
 
-      {/* ── 콘텐츠: 결과 영역 ── */}
+      {/* ── 메인 콘텐츠 ── */}
       <div className="analysis-content">
 
         {status === 'idle' && (
@@ -131,37 +131,27 @@ export default function SingleAnalysis() {
           </div>
         )}
 
-        {status === 'loading' && (
-          <ProgressBar step={step} message={message} />
-        )}
+        {status === 'loading' && <ProgressBar step={step} message={message} />}
 
         {status === 'error' && (
           <div className="alert-box alert-error">
             <span>❌ {errorMsg}</span>
-            <button
-              className="btn btn-sm"
+            <button className="btn btn-sm"
               style={{ marginLeft: 'auto', background: '#fed7d7', color: '#c53030', border: 'none', flexShrink: 0 }}
-              onClick={() => setStatus('idle')}
-            >
+              onClick={() => setStatus('idle')}>
               다시 시도
             </button>
           </div>
         )}
 
-        {status === 'done' && result && (
-          <>
-            <div className="alert-box alert-success">
-              ✅ 분석이 완료되었습니다.
-              <button
-                className="btn btn-sm btn-outline"
-                style={{ marginLeft: 'auto', flexShrink: 0 }}
-                onClick={() => { setStatus('idle'); setResult(null); setMarkerPos(null); setBuildingPolygon(null); }}
-              >
-                새 분석
-              </button>
-            </div>
-            <ResultCards result={result} />
-          </>
+        {isDone && (
+          <ResultTabs
+            result={result}
+            markerPos={markerPos}
+            buildingPolygon={buildingPolygon}
+            onMapClick={(addr) => startAnalysis({ address: addr })}
+            onReset={handleReset}
+          />
         )}
 
       </div>

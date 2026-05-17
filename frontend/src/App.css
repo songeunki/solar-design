@@ -11,9 +11,13 @@
 ══════════════════════════════════════ */
 .analysis-layout {
   display: grid;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: 420px 1fr;  /* 사이드바(지도 포함) */
   gap: 24px;
   align-items: start;
+}
+/* 결과 표시 시: 사이드바는 입력창만 → 좁게 */
+.analysis-layout--wide {
+  grid-template-columns: 300px 1fr;
 }
 
 .analysis-sidebar {
@@ -56,4 +60,60 @@
 ══════════════════════════════════════ */
 @media (max-width: 767px) {
   .analysis-layout { gap: 12px; }
+}
+
+/* ══════════════════════════════════════
+   결과 4탭 — 탭 바 & 패널
+══════════════════════════════════════ */
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.result-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.result-tab-bar::-webkit-scrollbar { display: none; }
+
+.result-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 20px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.result-tab-btn:hover {
+  color: var(--blue);
+}
+.result-tab-btn.active {
+  font-weight: 700;
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.result-tab-icon { font-size: 15px; }
+.result-tab-label { }
+
+.result-tab-panel {
+  animation: tabFadeIn 0.22s ease;
+}
+
+@media (max-width: 767px) {
+  .result-tab-btn { padding: 9px 12px; font-size: 12px; }
+  .result-tab-label { display: none; }
+  .result-tab-icon { font-size: 18px; }
 }
