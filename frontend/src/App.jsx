@@ -6,43 +6,64 @@ import CompareAnalysis from './components/CompareAnalysis';
 import AdminPage from './components/AdminPage';
 
 export default function App() {
-  // /admin 경로면 관리자 페이지 렌더링
   if (window.location.pathname === '/admin') {
     return <AdminPage />;
   }
 
-  const [activeTab, setActiveTab] = useState('single');
+  const [mode, setMode]           = useState('single');
+  const [hasResult, setHasResult] = useState(false);
+  const [resetKey, setResetKey]   = useState(0);
+
+  const handleReset = () => {
+    setHasResult(false);
+    setResetKey(k => k + 1);
+  };
 
   return (
     <div className="app-container">
-      {/* ===== 헤더 ===== */}
-      <header className="app-header">
-        <div className="header-logo">
-          <div className="header-logo-icon"><i className="fa-solid fa-solar-panel"></i></div>
-          AI 태양광 입지 분석 자동화 프로그램
+      {/* ===== 다크 헤더 ===== */}
+      <header className="app-header-dark">
+        <div className="header-left">
+          <div className="header-logo-icon-dark">
+            <i className="fa-solid fa-solar-panel"></i>
+          </div>
+          <span className="header-title">SolarDesign AI</span>
+          <span className="header-badge-dark">Beta v1.0</span>
         </div>
-        <span className="header-badge">Beta v1.0</span>
-      </header>
 
-      {/* ===== 메인 ===== */}
-      <main className="app-main">
-        {/* 탭 */}
-        <div className="tab-bar" style={{ marginBottom: 20 }}>
+        <div className="header-center">
           <button
-            className={`tab-btn ${activeTab === 'single' ? 'active' : ''}`}
-            onClick={() => setActiveTab('single')}
+            className={`header-tab ${mode === 'single' ? 'active' : ''}`}
+            onClick={() => { setMode('single'); handleReset(); }}
           >
             <i className="fa-solid fa-house"></i> 단일 분석
           </button>
           <button
-            className={`tab-btn ${activeTab === 'compare' ? 'active' : ''}`}
-            onClick={() => setActiveTab('compare')}
+            className={`header-tab ${mode === 'compare' ? 'active' : ''}`}
+            onClick={() => { setMode('compare'); handleReset(); }}
           >
-            <i className="fa-solid fa-code-compare"></i> 비교 분석
+            <i className="fa-solid fa-code-compare"></i> 비교 분析
           </button>
         </div>
 
-        {activeTab === 'single' ? <SingleAnalysis /> : <CompareAnalysis />}
+        <div className="header-right">
+          {hasResult && (
+            <button className="btn-new-analysis" onClick={handleReset}>
+              <i className="fa-solid fa-rotate"></i> 새 분析
+            </button>
+          )}
+          <a href="/admin" className="btn-admin" title="관리자 설정">
+            <i className="fa-solid fa-gear"></i>
+          </a>
+        </div>
+      </header>
+
+      {/* ===== 메인 ===== */}
+      <main className="app-main-dark">
+        {mode === 'single'
+          ? <SingleAnalysis key={resetKey} onResultChange={setHasResult} />
+          : <CompareAnalysis />
+        }
       </main>
     </div>
   );
