@@ -1,6 +1,8 @@
 """용도지역·토지특성 규제 분석."""
 from __future__ import annotations
 import xml.etree.ElementTree as ET
+import urllib.request
+import urllib.error
 import requests
 from dataclasses import dataclass, field
 from config import LURIS_API_KEY, VWORLD_LAND_API_KEY
@@ -93,7 +95,6 @@ class RegulationAPI:
     def _fetch_luris(self, pnu: str, result: RegulationResult) -> None:
         """LURIS API — XML 응답 파싱."""
         import warnings
-        from requests.exceptions import ConnectionError as ReqConnError
         from http.client import RemoteDisconnected
 
         if not LURIS_API_KEY:
@@ -104,27 +105,26 @@ class RegulationAPI:
                 f"{LURIS_URL}?serviceKey={LURIS_API_KEY}"
                 f"&pnu={pnu}&numOfRows=10&pageNo=1"
             )
-            resp = requests.get(url, timeout=15)
+            resp = urllib.request.urlopen(url, timeout=15)
+            body = resp.read().decode("utf-8")
 
             # 디버그: 실제 요청 URL + 응답 상태 + 응답 앞부분
             warnings.warn(
-                f"[LURIS] PNU={pnu} status={resp.status_code} url={resp.url}",
+                f"[LURIS] PNU={pnu} status={resp.status} url={resp.url}",
                 stacklevel=2,
             )
             warnings.warn(
-                f"[LURIS] 응답 앞 500자: {resp.text[:500]}",
+                f"[LURIS] 응답 앞 500자: {body[:500]}",
                 stacklevel=2,
             )
 
-            resp.raise_for_status()
             # XML 선언(<?xml ... encoding="UTF-8"?>)을 그대로 str에 넣으면
             # expat "multi-byte encodings not supported" 에러 발생 → 선언 제거 후 파싱
-            resp.encoding = "utf-8"
-            xml_text = resp.text.strip()
+            xml_text = body.strip()
             if xml_text.startswith("<?xml"):
                 xml_text = xml_text[xml_text.index("?>") + 2:].lstrip()
             root = ET.fromstring(xml_text or "<response/>")
-        except (ReqConnError, RemoteDisconnected, OSError) as e:
+        except (urllib.error.URLError, RemoteDisconnected, OSError) as e:
             result.errors.append(f"외부 API 일시적 오류 (Railway 네트워크 불안정): {e}")
             return
         except Exception as e:
