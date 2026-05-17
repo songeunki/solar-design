@@ -9,11 +9,11 @@ import DownloadButtons from './DownloadButtons';
 const PanelLayout3D = lazy(() => import('./PanelLayout3D'));
 
 const TABS = [
-  { id: 'location',   icon: <i className="fa-solid fa-location-dot" style={{marginRight:0}}></i>,     label: '입지 분석' },
-  { id: 'revenue',    icon: <i className="fa-solid fa-chart-line" style={{marginRight:0}}></i>,        label: '수익 분석' },
-  { id: 'design',     icon: <i className="fa-solid fa-drafting-compass" style={{marginRight:0}}></i>,  label: '설계 분석' },
-  { id: 'regulation', icon: <i className="fa-solid fa-scale-balanced" style={{marginRight:0}}></i>,   label: '규제 분석' },
-  { id: 'ai',         icon: <i className="fa-solid fa-robot" style={{marginRight:0}}></i>,             label: 'AI 종합 평가' },
+  { id: 'location',   icon: 'fa-solid fa-location-dot',    label: '입지' },
+  { id: 'revenue',    icon: 'fa-solid fa-chart-line',       label: '수익' },
+  { id: 'design',     icon: 'fa-solid fa-drafting-compass', label: '설계' },
+  { id: 'regulation', icon: 'fa-solid fa-scale-balanced',   label: '규제' },
+  { id: 'ai',         icon: 'fa-solid fa-robot',            label: 'AI' },
 ];
 
 // ── 공통 KPI 카드 ────────────────────────────────────────────────────────────
@@ -252,6 +252,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     building = {}, system = {}, financial = {},
     monthly_data = [], panel_layout = null,
     report_url, pdf_url, regulation = null,
+    solar_check = null,
   } = result;
 
   const fmt만 = v => v ? `${Math.round(v / 10000).toLocaleString()}만원` : '-';
@@ -334,13 +335,25 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
           onClick={onReset}><i className="fa-solid fa-rotate"></i> 새 분석</button>
       </div>
 
+      {/* ── 기존 태양광 감지 배너 ─────────────────────────────────────────── */}
+      {solar_check?.has_existing && (
+        <div className="solar-existing-banner">
+          <i className="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <strong>기존 태양광 설비 감지</strong>
+            <p>반경 100m 내 {solar_check.nearby_count}개의 태양광 발전소가 이미 설치되어 있습니다.
+              중복 설치 가능 여부 및 계통 연계 용량을 사전에 확인하세요.</p>
+          </div>
+        </div>
+      )}
+
       {/* ── 탭 바 ─────────────────────────────────────────────────────────── */}
       <div className="result-tab-bar">
         {TABS.map(tab => (
           <button key={tab.id} className={`result-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.id)}>
-            <span className="result-tab-icon">{tab.icon}</span>
-            <span className="result-tab-label">{tab.label}</span>
+            <i className={tab.icon}></i>
+            <span>{tab.label}</span>
           </button>
         ))}
       </div>

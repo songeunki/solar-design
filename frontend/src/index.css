@@ -1456,3 +1456,59 @@ body {
   .result-tab-btn:hover     { background: transparent; color: #8899AA; }
   .btn-start-analysis:hover { transform: none; }
 }
+
+/* ===== 모바일 탭 — 아이콘+텍스트 세로 배열 ===== */
+@media (max-width: 767px) {
+  .result-tab-btn {
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+    padding: 8px 6px;
+    min-width: 54px;
+  }
+  .result-tab-btn i {
+    font-size: 15px;
+    margin-right: 0 !important;
+  }
+  .result-tab-btn span {
+    display: block !important;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  /* 기존 label 숨김 규칙 무력화 */
+  .result-tab-label { display: block; }
+}
+
+/* ===== 기존 태양광 설치 감지 배너 ===== */
+.solar-existing-banner {
+  background: rgba(255,179,0,0.12);
+  border: 1px solid var(--accent-amber, #FFB300);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 12px 12px 0;
+  color: var(--accent-amber, #FFB300);
+}
+
+.solar-existing-banner .fa-triangle-exclamation {
+  font-size: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  margin-right: 0;
+}
+
+.solar-existing-banner strong {
+  color: #fff;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.solar-existing-banner p {
+  color: #8899AA;
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.5;
+}

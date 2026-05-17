@@ -124,6 +124,13 @@ def run_pipeline(
     except Exception:
         pass
 
+    solar_check: dict = {}
+    try:
+        from data_collector.solar_check import check_existing_solar
+        solar_check = check_existing_solar(location.lat, location.lng)
+    except Exception:
+        pass
+
     return {
         # 보고서 원본
         "summary":   report.summary,
@@ -174,6 +181,7 @@ def run_pipeline(
         "pdf_url":      pdf_url,
         "panel_layout": panel_layout.to_dict(),
         "regulation":   regulation,
+        "solar_check":  solar_check,
     }
 
 
