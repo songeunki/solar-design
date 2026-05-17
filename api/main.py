@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routers import analyze, compare
+from api.routers import analyze, compare, ai
 
 app = FastAPI(
     title="태양광 설계 자동화 API",
@@ -24,6 +24,7 @@ app.add_middleware(
 
 app.include_router(analyze.router)
 app.include_router(compare.router)
+app.include_router(ai.router)
 
 _REPORTS_DIR = pathlib.Path(__file__).parent.parent / "output" / "reports"
 _REPORTS_DIR.mkdir(parents=True, exist_ok=True)

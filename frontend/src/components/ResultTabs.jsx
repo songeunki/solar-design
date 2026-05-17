@@ -178,6 +178,50 @@ function PaybackViz({ paybackYear, installCost, yearlyRevenue, netProfit20y }) {
   );
 }
 
+// ── AI 응답 마크다운 렌더러 ──────────────────────────────────────────────────
+function AiMarkdown({ text }) {
+  if (!text) return null;
+
+  const parseLine = (line) => {
+    // **bold** 인라인 처리
+    const parts = line.split(/\*\*(.*?)\*\*/);
+    if (parts.length === 1) return line;
+    return parts.map((p, i) =>
+      i % 2 === 1 ? <strong key={i}>{p}</strong> : p
+    );
+  };
+
+  return (
+    <div style={{ fontSize: 14, lineHeight: 1.85, color: 'var(--text-primary)' }}>
+      {text.split('\n').map((line, i) => {
+        if (line.startsWith('## ')) {
+          return (
+            <div key={i} style={{
+              fontWeight: 700, fontSize: 15, color: 'var(--blue)',
+              marginTop: i > 0 ? 22 : 0, marginBottom: 10,
+              paddingBottom: 5, borderBottom: '1px solid var(--border)',
+            }}>
+              {line.slice(3)}
+            </div>
+          );
+        }
+        if (line.startsWith('- ') || line.startsWith('• ')) {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 5, paddingLeft: 4 }}>
+              <span style={{ color: 'var(--blue)', flexShrink: 0, marginTop: 1 }}>•</span>
+              <span>{parseLine(line.slice(2))}</span>
+            </div>
+          );
+        }
+        if (line === '') return <div key={i} style={{ height: 6 }} />;
+        return (
+          <div key={i} style={{ marginBottom: 3 }}>{parseLine(line)}</div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── 섹션 헤더 헬퍼 ───────────────────────────────────────────────────────────
 function SectionHeader({ title, badge, right }) {
   return (
@@ -226,27 +270,56 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     { icon: '🏆', label: '20년 순수익',    value: fmt만(financial.netProfit20y),  unit: '', color: 'green'  },
   ];
 
-  // ── AI 평가 생성 ─────────────────────────────────────────────────────────────
+  // ── AI 평가 생성 (Claude API SSE 스트리밍) ──────────────────────────────────
   const generateAi = async () => {
     setAiState('loading');
+    setAiText('');
     try {
       const res = await fetch('/api/ai-evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: building.address, building, system, financial }),
+        body: JSON.stringify({
+          address: building.address,
+          building,
+          system,
+          financial,
+          monthly_data,
+        }),
       });
-      if (!res.ok) throw new Error('not_ready');
-      const data = await res.json();
-      setAiText(data.evaluation || '평가 결과를 받지 못했습니다.');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      setAiState('streaming');
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();  // 미완성 줄 보존
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') { setAiState('done'); return; }
+          try {
+            const { text, error } = JSON.parse(payload);
+            if (error) throw new Error(error);
+            if (text) setAiText(prev => prev + text);
+          } catch { /* JSON 파싱 실패 무시 */ }
+        }
+      }
       setAiState('done');
-    } catch {
-      setAiText(
-        '⚠️ AI 평가 기능은 다음 단계에서 Claude API와 연동될 예정입니다.\n\n' +
-        `분석 주소: ${building.address || '-'}\n` +
-        `설치 용량: ${system.totalKw}kW  |  연간 발전량: ${system.yearlyTotal?.toLocaleString()}kWh\n` +
-        `투자 회수: ${financial.paybackYear}년  |  20년 순수익: ${fmt만(financial.netProfit20y)}`
-      );
-      setAiState('done');
+    } catch (err) {
+      setAiText(`오류: ${err.message}`);
+      setAiState('error');
     }
   };
 
@@ -460,57 +533,64 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
             <div className="card card-accent">
               <SectionHeader
                 title="🤖 Claude AI 종합 평가"
-                right={<span className="badge badge-blue">Claude 3.5 Sonnet</span>}
+                right={<span className="badge badge-blue">claude-sonnet-4-6</span>}
               />
               <div style={{ padding: '16px 24px 20px' }}>
+
                 {/* 분석 컨텍스트 요약 */}
                 <div style={{
                   background: 'var(--bg)', border: '1px solid var(--border)',
                   borderRadius: 8, padding: '14px 16px', marginBottom: 18,
-                  fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7,
+                  fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8,
                 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text-primary)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text-primary)' }}>
                     📋 분석 컨텍스트
                   </div>
-                  <div>📍 <strong>{building.address || '-'}</strong></div>
+                  <div>📍 {building.address || '-'}</div>
                   <div>⚡ 설치용량 <strong>{system.totalKw}kW</strong> · 연간 발전량 <strong>{system.yearlyTotal?.toLocaleString()}kWh</strong></div>
                   <div>💰 투자비 <strong>{fmt만(financial.installCost)}</strong> · 회수 <strong>{financial.paybackYear}년</strong> · 20년 순수익 <strong>{fmt만(financial.netProfit20y)}</strong></div>
                 </div>
 
+                {/* 초기: 버튼 */}
                 {aiState === 'idle' && (
                   <button className="btn btn-primary"
-                    style={{ width: '100%', padding: '13px', fontSize: 15, fontWeight: 700, borderRadius: 10 }}
+                    style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 700, borderRadius: 10 }}
                     onClick={generateAi}>
                     🤖 Claude AI로 종합 평가 생성
                   </button>
                 )}
 
+                {/* 연결 중 */}
                 {aiState === 'loading' && (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                    <div style={{ marginBottom: 14 }}>
-                      <span className="spinner" style={{ width: 28, height: 28 }} />
-                    </div>
+                  <div style={{ textAlign: 'center', padding: '44px 0', color: 'var(--text-muted)' }}>
+                    <span className="spinner" style={{ width: 28, height: 28, display: 'inline-block', marginBottom: 14 }} />
                     <div style={{ fontSize: 14, fontWeight: 600 }}>Claude AI가 분석 중입니다…</div>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>입지 조건, 재무 지표, 설계 데이터를 종합 평가합니다</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>입지·재무·설계 데이터를 종합 평가합니다</div>
                   </div>
                 )}
 
-                {(aiState === 'done' || aiState === 'error') && aiText && (
+                {/* 스트리밍 / 완료 / 오류 */}
+                {(aiState === 'streaming' || aiState === 'done' || aiState === 'error') && (
                   <div>
                     <div style={{
-                      background: 'white', border: '1px solid var(--border)', borderRadius: 10,
-                      padding: '20px 22px', fontSize: 14, lineHeight: 1.8,
-                      color: 'var(--text-primary)', whiteSpace: 'pre-wrap',
+                      background: '#fafbfc', border: '1px solid var(--border)', borderRadius: 10,
+                      padding: '20px 22px', minHeight: 120,
                     }}>
-                      {aiText}
+                      <AiMarkdown text={aiText} />
+                      {aiState === 'streaming' && (
+                        <span className="ai-cursor" />
+                      )}
                     </div>
-                    <button className="btn btn-outline"
-                      style={{ marginTop: 12, fontSize: 12 }}
-                      onClick={() => { setAiState('idle'); setAiText(''); }}>
-                      ↺ 다시 생성
-                    </button>
+                    {aiState !== 'streaming' && (
+                      <button className="btn btn-outline"
+                        style={{ marginTop: 12, fontSize: 12 }}
+                        onClick={() => { setAiState('idle'); setAiText(''); }}>
+                        ↺ 다시 생성
+                      </button>
+                    )}
                   </div>
                 )}
+
               </div>
             </div>
           </div>

@@ -117,3 +117,21 @@
   .result-tab-label { display: none; }
   .result-tab-icon { font-size: 18px; }
 }
+
+/* ══════════════════════════════════════
+   AI 스트리밍 커서
+══════════════════════════════════════ */
+@keyframes aiCursorBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.ai-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--blue);
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: aiCursorBlink 0.9s infinite;
+  border-radius: 1px;
+}
