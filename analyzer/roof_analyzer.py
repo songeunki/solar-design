@@ -1,10 +1,10 @@
 import math
 from dataclasses import dataclass, field
 from data_collector.building_api import BuildingInfo
-from config import DEFAULTS
+from config import DEFAULTS, get_admin_defaults
 
-_PANEL_AREA = DEFAULTS["panel_width_m"] * DEFAULTS["panel_height_m"]  # ~2.375 m²
-_PANEL_H    = DEFAULTS["panel_height_m"]                               # 2.094 m
+_PANEL_AREA = DEFAULTS["panel_width_m"] * DEFAULTS["panel_height_m"]  # 기본값 (import 시점)
+_PANEL_H    = DEFAULTS["panel_height_m"]                               # 기본값 (import 시점)
 
 # 서울 기준 위도 및 최적 경사각
 _LATITUDE  = 37.5              # °N
@@ -46,6 +46,11 @@ class RoofAnalyzer:
     """지붕 면적·형태 분석 및 패널 배치 계산 (태양 고도각·방위각 보정 포함)"""
 
     def analyze(self, building: BuildingInfo) -> RoofAnalysis:
+        cfg       = get_admin_defaults()
+        panel_h   = cfg["panel_height_m"]
+        panel_area = cfg["panel_width_m"] * cfg["panel_height_m"]
+        min_roof  = cfg["min_roof_area_m2"]
+
         roof_type = building.roof_type if building.roof_type in _USABLE_RATIO else "평지붕"
         notes: list[str] = []
 
@@ -65,7 +70,7 @@ class RoofAnalyzer:
             gcr = _gcr_from_solar(tilt, elev_winter)
             notes.append(
                 f"동지 태양 고도각 {elev_winter:.1f}° 기준 GCR {gcr:.2f} 적용 "
-                f"(행간 이격거리 {_row_gap_m(tilt, elev_winter):.2f} m)"
+                f"(행간 이격거리 {_row_gap_m(tilt, elev_winter, panel_h):.2f} m)"
             )
         else:
             gcr = _GCR_SLOPE
@@ -74,13 +79,13 @@ class RoofAnalyzer:
         usable = building.roof_area_m2 * _USABLE_RATIO[roof_type]
         if building.roof_area_m2 == 0:
             notes.append("건축물대장 건축면적 정보 없음 — 현장 실측 필요")
-        elif usable < DEFAULTS["min_roof_area_m2"]:
+        elif usable < min_roof:
             notes.append(
                 f"유효 면적({usable:.1f}㎡)이 최소 기준"
-                f"({DEFAULTS['min_roof_area_m2']}㎡) 미만 — 설치 부적합 가능성"
+                f"({min_roof}㎡) 미만 — 설치 부적합 가능성"
             )
 
-        area_per_panel = _PANEL_AREA / gcr
+        area_per_panel = panel_area / gcr
         max_panels = max(0, math.floor(usable / area_per_panel))
         if max_panels == 0:
             notes.append("패널 설치 가능 수량 0 — 지붕 면적 또는 형태 재확인 필요")
@@ -138,9 +143,9 @@ def _gcr_from_solar(tilt_deg: float, elev_winter_deg: float) -> float:
     return round(gcr, 3)
 
 
-def _row_gap_m(tilt_deg: float, elev_winter_deg: float) -> float:
+def _row_gap_m(tilt_deg: float, elev_winter_deg: float, panel_h: float = _PANEL_H) -> float:
     """동지 기준 행간 최소 이격거리 (m)"""
-    shadow_h = _PANEL_H * math.sin(math.radians(tilt_deg))
+    shadow_h = panel_h * math.sin(math.radians(tilt_deg))
     return round(shadow_h / math.tan(math.radians(elev_winter_deg)), 2)
 
 

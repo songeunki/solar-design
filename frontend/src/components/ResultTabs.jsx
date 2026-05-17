@@ -267,7 +267,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
   const revenueKpis = [
     { icon: '🏗️', label: '총 설치비용',    value: fmt만(financial.installCost),   unit: '', color: 'blue'   },
     { icon: '💵', label: '연간 전기 수익',  value: fmt만(financial.yearlyRevenue), unit: '', color: 'green'  },
-    { icon: '📜', label: 'REC 수익(추정)', value: fmt만(financial.recRevenue),    unit: '', color: 'orange' },
+    { icon: '📜', label: 'REC 수익(추정)', value: financial.recRevenue ? fmt만(financial.recRevenue) : '-', unit: '', color: 'orange' },
     { icon: '🏆', label: '20년 순수익',    value: fmt만(financial.netProfit20y),  unit: '', color: 'green'  },
   ];
 
@@ -356,6 +356,42 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
               {locationKpis.map((k, i) => <KpiCard key={i} {...k} />)}
             </div>
 
+            {/* 입지 요약 */}
+            <div className="card card-accent">
+              <SectionHeader title="📋 입지 요약" />
+              <div style={{ padding: '0 24px 16px' }}>
+                {[
+                  { label: '주소',
+                    value: building.address || '-' },
+                  { label: '방위각',
+                    value: building.azimuth != null
+                      ? `${building.azimuth}° ${building.azimuthSource === 'override' ? '(수동 설정)' : '(자동 계산)'}`
+                      : '-',
+                    cls: 'blue' },
+                  { label: '건물 용도',
+                    value: building.purpose || '-' },
+                  { label: '건축면적',
+                    value: building.archArea ? `${building.archArea.toLocaleString()} m²` : '-' },
+                  { label: '연간 일사량',
+                    value: building.irradiation ? `${building.irradiation} kWh/m²` : '-',
+                    cls: 'orange' },
+                  { label: '용도지역',
+                    value: regulation?.zones?.length
+                      ? regulation.zones.join(' · ')
+                      : (regulation ? '데이터 없음' : '분석 중…') },
+                  { label: '설치 가능성',
+                    value: regulation?.zoneFeasibility || '-',
+                    cls: regulation?.zoneFeasibility === '가능' ? 'green'
+                       : regulation?.zoneFeasibility === '불가' ? 'red' : '' },
+                ].map((row, i) => (
+                  <div className="info-row" key={i}>
+                    <span className="info-row-label">{row.label}</span>
+                    <span className={`info-row-value ${row.cls || ''}`}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* 위성지도 + 패널 오버레이 */}
             <div className="card card-accent">
               <SectionHeader
@@ -441,7 +477,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                 {[
                   { label: '총 설치비용',      value: fmt만(financial.installCost) },
                   { label: '연간 전기 판매 수익', value: fmt만(financial.yearlyRevenue), cls: 'orange' },
-                  { label: 'REC 수익 (추정)',   value: fmt만(financial.recRevenue),    cls: 'orange' },
+                  { label: 'REC 수익 (추정)',   value: financial.recRevenue ? fmt만(financial.recRevenue) : '-', cls: 'orange' },
                   { label: '투자 회수 기간',     value: financial.paybackYear ? `${financial.paybackYear}년` : '-', cls: 'blue' },
                   { label: '20년 순수익 (추정)', value: fmt만(financial.netProfit20y), cls: 'blue' },
                 ].map((row, i) => (

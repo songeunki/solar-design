@@ -1,8 +1,9 @@
 """용도지역·토지특성 규제 분석."""
 from __future__ import annotations
+import xml.etree.ElementTree as ET
 import requests
 from dataclasses import dataclass, field
-from config import LURIS_API_KEY, VWORLD_API_KEY
+from config import LURIS_API_KEY, VWORLD_LAND_API_KEY
 
 LURIS_URL       = "https://apis.data.go.kr/1613000/arLandUseInfoService/DTarLandUseInfo"
 VWORLD_LAND_URL = "https://api.vworld.kr/ned/data/getLandCharacteristics"
@@ -90,6 +91,7 @@ class RegulationAPI:
         return result
 
     def _fetch_luris(self, pnu: str, result: RegulationResult) -> None:
+        """LURIS API — XML 응답 파싱."""
         if not LURIS_API_KEY:
             result.errors.append("LURIS_API_KEY 미설정")
             return
@@ -99,37 +101,35 @@ class RegulationAPI:
                 params={
                     "serviceKey": LURIS_API_KEY,
                     "pnu":        pnu,
-                    "reqType":    1,
-                    "_type":      "json",
-                    "numOfRows":  50,
+                    "numOfRows":  10,
                     "pageNo":     1,
                 },
                 timeout=15,
             )
             resp.raise_for_status()
-            data = resp.json()
+            root = ET.fromstring(resp.content)
         except Exception as e:
             result.errors.append(f"LURIS 조회 실패: {e}")
             return
 
-        items = (
-            data.get("response", {})
-                .get("body", {})
-                .get("items", {})
-                .get("item", [])
-        )
-        if isinstance(items, dict):
-            items = [items]
-        if not items:
+        # 에러 코드 확인
+        result_code = root.findtext("./header/resultCode") or ""
+        if result_code not in ("00", "0000", ""):
+            result_msg = root.findtext("./header/resultMsg") or ""
+            result.errors.append(f"LURIS 오류 (resultCode={result_code}): {result_msg}")
+            return
+
+        items_el = root.findall("./body/items/item")
+        if not items_el:
             result.errors.append("LURIS 용도지역 데이터 없음")
             return
 
         zones_set: set[str]    = set()
         restrictions: list[str] = []
 
-        for item in items:
-            dtype   = (item.get("prposAreaDstrcNm") or "").strip()
-            area_nm = (item.get("prposAreaNm")      or "").strip()
+        for item in items_el:
+            dtype   = (item.findtext("prposAreaDstrcNm") or "").strip()
+            area_nm = (item.findtext("prposAreaNm")      or "").strip()
             if not area_nm:
                 continue
             if dtype == "용도지역":
@@ -156,16 +156,16 @@ class RegulationAPI:
             result.zone_note        = "용도지역 데이터 없음"
 
     def _fetch_vworld(self, pnu: str, result: RegulationResult) -> None:
-        if not VWORLD_API_KEY:
-            result.errors.append("VWORLD_API_KEY 미설정")
+        """V-World NED 토지특성 API — JSON 응답 파싱."""
+        if not VWORLD_LAND_API_KEY:
+            result.errors.append("VWORLD_LAND_API_KEY 미설정")
             return
         try:
             resp = requests.get(
                 VWORLD_LAND_URL,
                 params={
-                    "key":    VWORLD_API_KEY,
+                    "key":    VWORLD_LAND_API_KEY,
                     "pnu":    pnu,
-                    "domain": "localhost",
                     "format": "json",
                 },
                 timeout=12,
@@ -176,10 +176,13 @@ class RegulationAPI:
             result.errors.append(f"V-World 토지특성 조회 실패: {e}")
             return
 
-        fields = (
-            data.get("landCharacteristics", {})
-                .get("field", [])
+        # 응답 구조: landCharacteristics.field[] 또는 response.result.landCharacteristics.field[]
+        lc = (
+            data.get("landCharacteristics")
+            or data.get("response", {}).get("result", {}).get("landCharacteristics")
+            or {}
         )
+        fields = lc.get("field", [])
         if not fields:
             result.errors.append("V-World 토지특성 결과 없음")
             return
@@ -187,7 +190,7 @@ class RegulationAPI:
         for f in fields:
             name = (f.get("name")  or "").strip()
             val  = (f.get("value") or "").strip()
-            if not val or val == "-":
+            if not val or val in ("-", "null", ""):
                 continue
             if name == "jimok":
                 result.land_category = _JIMOK_MAP.get(val, val)

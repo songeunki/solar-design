@@ -2,7 +2,7 @@ import math
 from dataclasses import dataclass
 from analyzer.roof_analyzer import RoofAnalysis
 from data_collector.weather_api import SolarData
-from config import DEFAULTS
+from config import get_admin_defaults
 
 # 표준 인버터 용량 라인업 (kW)
 _STANDARD_INVERTER_KW = [3, 5, 8, 10, 15, 20, 30, 50, 75, 100, 150, 200, 250]
@@ -29,12 +29,13 @@ class ElectricalDesigner:
     """전기 설계: 용량 산정, 인버터 선정, 배선 설계"""
 
     def design(self, roof: RoofAnalysis, weather: SolarData) -> ElectricalDesign:
+        cfg = get_admin_defaults()
         panel_count = roof.max_panels
-        total_kw = round(panel_count * DEFAULTS["panel_watt"] / 1000, 2)
+        total_kw = round(panel_count * cfg["panel_watt"] / 1000, 2)
 
         # 연간 발전량: 경사면 일사량 보정 + 성능 계수(PR) + 방위각 보정 적용
         tilt_factor = 1.0 + 0.003 * roof.tilt_deg
-        pr = (1 - DEFAULTS["system_loss"]) * (1 - roof.shading_loss) * roof.azimuth_factor
+        pr = (1 - cfg["system_loss"]) * (1 - roof.shading_loss) * roof.azimuth_factor
 
         # 월별 발전량: 월별 일사량(kWh/m²) × 시스템 용량 × 보정 계수
         monthly_gen = [

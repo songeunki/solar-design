@@ -10,10 +10,10 @@ from analyzer.roof_analyzer import RoofAnalysis
 from designer.electrical import ElectricalDesign
 from designer.structural import StructuralDesign
 
-_OUTPUT_DIR  = pathlib.Path(__file__).parent / "reports"
-_COST_PER_KW = 1_500_000
-_ELEC_PRICE  = 120
-_CO2_FACTOR  = 0.4599
+_OUTPUT_DIR = pathlib.Path(__file__).parent / "reports"
+_CO2_FACTOR = 0.4599
+_REC_WEIGHT = 1.5       # 건물 부착형 소규모 가중치
+_REC_PRICE  = 50_000    # 원/REC (현물 시세 추정)
 
 _WIRING_LABELS: dict[str, str] = {
     "dc_cable_mm2":          "DC 케이블 단면적 (mm²)",
@@ -283,13 +283,20 @@ def _build_summary(
 
 
 def _calc_economics(e: ElectricalDesign) -> dict:
-    total_cost  = e.total_capacity_kw * _COST_PER_KW
-    annual_save = e.annual_generation_kwh * _ELEC_PRICE
+    from config import get_admin_finance
+    fin = get_admin_finance()
+    cost_per_kw  = fin["cost_per_kw"]      * 10_000  # 만원 → 원
+    elec_price   = fin["revenue_per_kwh"]             # 원/kWh
+
+    total_cost  = e.total_capacity_kw * cost_per_kw
+    annual_save = e.annual_generation_kwh * elec_price
     payback     = total_cost / annual_save if annual_save > 0 else 0.0
     co2         = e.annual_generation_kwh * _CO2_FACTOR
+    annual_rec  = round(e.annual_generation_kwh / 1000 * _REC_WEIGHT * _REC_PRICE)
     return {
         "예상설치비_만원":  round(total_cost / 10_000),
         "연간절감액_만원":  round(annual_save / 10_000, 1),
+        "연간REC수익_만원": round(annual_rec / 10_000, 1),
         "단순회수기간_년":  round(payback, 1),
         "연간CO2저감_kg":   round(co2),
     }

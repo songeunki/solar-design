@@ -107,8 +107,9 @@ def run_pipeline(
     ec             = report.summary.get("경제성", {})
     install_cost   = ec.get("예상설치비_만원", 0) * 10_000      # 원
     yearly_revenue = round(ec.get("연간절감액_만원", 0) * 10_000)  # 원/년
+    rec_revenue    = round(ec.get("연간REC수익_만원", 0) * 10_000)  # 원/년
     payback_year   = ec.get("단순회수기간_년", 0)
-    net_profit_20y = round(yearly_revenue * 20 - install_cost)
+    net_profit_20y = round((yearly_revenue + rec_revenue) * 20 - install_cost)
 
     html_url = _to_url(report.file_path)
     pdf_url  = _to_url(report.pdf_path)
@@ -139,17 +140,23 @@ def run_pipeline(
             "roofShape":     roof_shape,
             "azimuth":       effective_azimuth,
             "azimuthSource": azimuth_source,
+            "structure":     building.structure or "",
+            "purpose":       building.extra.get("purpose", ""),
+            "irradiation":   round(sum(weather.monthly_irradiance), 1),
         },
         "system": {
-            "panelCount":  electrical.panel_count,
-            "totalKw":     electrical.total_capacity_kw,
-            "inverterKw":  electrical.inverter_capacity_kw,
-            "monthlyAvg":  round(electrical.annual_generation_kwh / 12),
-            "yearlyTotal": electrical.annual_generation_kwh,
+            "panelCount":   electrical.panel_count,
+            "totalKw":      electrical.total_capacity_kw,
+            "inverterKw":   electrical.inverter_capacity_kw,
+            "monthlyAvg":   round(electrical.annual_generation_kwh / 12),
+            "yearlyTotal":  electrical.annual_generation_kwh,
+            "stringConfig": electrical.string_config,
+            "co2Year":      ec.get("연간CO2저감_kg", 0),
         },
         "financial": {
             "installCost":   install_cost,
             "yearlyRevenue": yearly_revenue,
+            "recRevenue":    rec_revenue,
             "paybackYear":   payback_year,
             "netProfit20y":  net_profit_20y,
         },
