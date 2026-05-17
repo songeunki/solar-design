@@ -60,23 +60,38 @@ class BuildingAPI:
                 info.extra["building_ns_m"] = osm_ns_m
             return info
 
-        # 1단계: 건축물대장 API (Juso→Kakao로 PNU 확보)
+        # 1단계: PNU 확보
+        _pnu: str | None = None
         try:
-            pnu  = _get_pnu(location.address)
-            item = _fetch_building_item(pnu)
-            return _apply_osm(_parse_item(location.address, item))
+            _pnu = _get_pnu(location.address)
         except BuildingAPIError as e:
-            warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
+            warnings.warn(f"[BuildingAPI] PNU 조회 실패: {e}", stacklevel=2)
 
-        # 2단계: OSM 면적 폴백
+        # 2단계: 건축물대장 API
+        if _pnu:
+            try:
+                item = _fetch_building_item(_pnu)
+                info = _apply_osm(_parse_item(location.address, item))
+                info.extra["pnu"] = _pnu
+                return info
+            except BuildingAPIError as e:
+                warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
+
+        # 3단계: OSM 면적 폴백
         if osm_area:
             warnings.warn(
                 f"[BuildingAPI] OSM 면적 사용: {osm_area:.1f}㎡ ({location.address})",
                 stacklevel=2,
             )
-            return _apply_osm(_fallback_info(location.address, roof_area=osm_area, area_source="OSM"))
+            info = _apply_osm(_fallback_info(location.address, roof_area=osm_area, area_source="OSM"))
+            if _pnu:
+                info.extra["pnu"] = _pnu
+            return info
 
-        return _fallback_info(location.address)
+        info = _fallback_info(location.address)
+        if _pnu:
+            info.extra["pnu"] = _pnu
+        return info
 
 
 # ── PNU 추출 ───────────────────────────────────────────────────────────────────

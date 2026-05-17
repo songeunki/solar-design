@@ -43,7 +43,7 @@ def run_pipeline(
 
     def p(step: int, msg: str) -> None:
         if on_progress:
-            on_progress(step, 5, msg)
+            on_progress(step, 6, msg)
 
     p(1, "주소 조회")
     location = AddressAPI().get_coordinates(address)
@@ -59,7 +59,7 @@ def run_pipeline(
     electrical = ElectricalDesigner().design(roof, weather)
     structural = StructuralDesigner().design(roof, electrical)
 
-    p(5, "보고서 생성")
+    p(5, "보고서 생성 및 규제 분석")
     solar_altitude_deg = _calc_solar_altitude(location.lat)
 
     # 패널 배치 계산 (위성 윤곽 검출 시도 → 실패 시 직사각형 근사)
@@ -113,6 +113,15 @@ def run_pipeline(
     html_url = _to_url(report.file_path)
     pdf_url  = _to_url(report.pdf_path)
 
+    p(6, "규제 분석")
+    regulation = None
+    try:
+        from data_collector.regulation_api import RegulationAPI
+        _pnu = building.extra.get("pnu")
+        regulation = RegulationAPI().fetch(address, pnu=_pnu).to_dict()
+    except Exception:
+        pass
+
     return {
         # 보고서 원본
         "summary":   report.summary,
@@ -156,6 +165,7 @@ def run_pipeline(
         "report_url":   html_url,
         "pdf_url":      pdf_url,
         "panel_layout": panel_layout.to_dict(),
+        "regulation":   regulation,
     }
 
 

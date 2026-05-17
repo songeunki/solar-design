@@ -9,10 +9,11 @@ import DownloadButtons from './DownloadButtons';
 const PanelLayout3D = lazy(() => import('./PanelLayout3D'));
 
 const TABS = [
-  { id: 'location', icon: '📍', label: '입지 분석' },
-  { id: 'revenue',  icon: '💰', label: '수익 분석' },
-  { id: 'design',   icon: '🔧', label: '설계 분석' },
-  { id: 'ai',       icon: '🤖', label: 'AI 종합 평가' },
+  { id: 'location',   icon: '📍', label: '입지 분석' },
+  { id: 'revenue',    icon: '💰', label: '수익 분석' },
+  { id: 'design',     icon: '🔧', label: '설계 분석' },
+  { id: 'regulation', icon: '🏛️', label: '규제 분석' },
+  { id: 'ai',         icon: '🤖', label: 'AI 종합 평가' },
 ];
 
 // ── 공통 KPI 카드 ────────────────────────────────────────────────────────────
@@ -250,7 +251,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
   const {
     building = {}, system = {}, financial = {},
     monthly_data = [], panel_layout = null,
-    report_url, pdf_url,
+    report_url, pdf_url, regulation = null,
   } = result;
 
   const fmt만 = v => v ? `${Math.round(v / 10000).toLocaleString()}만원` : '-';
@@ -527,7 +528,179 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
           </div>
         )}
 
-        {/* ════ 탭 4: AI 종합 평가 ════ */}
+        {/* ════ 탭 4: 규제 분석 ════ */}
+        {activeTab === 'regulation' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {!regulation ? (
+              <div className="card card-accent">
+                <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>🏛️</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
+                    규제 정보를 불러오지 못했습니다
+                  </div>
+                  <div style={{ fontSize: 13 }}>PNU 정보가 없거나 API 조회에 실패했습니다.</div>
+                </div>
+              </div>
+            ) : (() => {
+              const reg = regulation;
+              const riskColor = {
+                '낮음':   { bg: '#f0fff4', border: '#c6f6d5', text: '#276749', badge: '#38a169' },
+                '보통':   { bg: '#fffbeb', border: '#fde68a', text: '#744210', badge: '#d69e2e' },
+                '높음':   { bg: '#fff5f5', border: '#fed7d7', text: '#742a2a', badge: '#e53e3e' },
+                '확인불가': { bg: '#f7fafc', border: '#e2e8f0', text: '#4a5568', badge: '#718096' },
+              }[reg.riskLevel] || { bg: '#f7fafc', border: '#e2e8f0', text: '#4a5568', badge: '#718096' };
+
+              const feasColor = {
+                '가능':   '#38a169',
+                '조건부': '#d69e2e',
+                '불가':   '#e53e3e',
+                '확인불가': '#718096',
+              }[reg.zoneFeasibility] || '#718096';
+
+              return (
+                <>
+                  {/* 종합 리스크 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="⚠️ 종합 리스크 평가" />
+                    <div style={{ padding: '16px 24px 20px' }}>
+                      <div style={{
+                        background: riskColor.bg, border: `1px solid ${riskColor.border}`,
+                        borderRadius: 10, padding: '16px 20px', marginBottom: 12,
+                        display: 'flex', alignItems: 'center', gap: 14,
+                      }}>
+                        <div style={{
+                          width: 52, height: 52, borderRadius: '50%',
+                          background: riskColor.badge, flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'white', fontSize: 20,
+                        }}>
+                          {reg.riskLevel === '낮음' ? '✓' : reg.riskLevel === '높음' ? '✕' : '!'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 18, color: riskColor.text }}>
+                            리스크 {reg.riskLevel}
+                          </div>
+                          {reg.riskReasons.map((r, i) => (
+                            <div key={i} style={{ fontSize: 13, color: riskColor.text, marginTop: 3, opacity: 0.85 }}>
+                              {r}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {reg.errors.length > 0 && (
+                        <div style={{
+                          background: '#fffbeb', border: '1px solid #fde68a',
+                          borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#744210',
+                        }}>
+                          ⚠️ {reg.errors.join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 용도지역 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="🗺️ 용도지역 정보" />
+                    <div style={{ padding: '0 24px 16px' }}>
+                      {reg.zones.length > 0 ? (
+                        <>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, marginTop: 4 }}>
+                            {reg.zones.map((z, i) => (
+                              <span key={i} style={{
+                                background: '#ebf4ff', color: '#2b6cb0',
+                                border: '1px solid #bee3f8', borderRadius: 6,
+                                fontSize: 13, fontWeight: 700, padding: '4px 12px',
+                              }}>{z}</span>
+                            ))}
+                            <span style={{
+                              background: feasColor + '22', color: feasColor,
+                              border: `1px solid ${feasColor}44`,
+                              borderRadius: 6, fontSize: 13, fontWeight: 700, padding: '4px 12px',
+                            }}>설치 {reg.zoneFeasibility}</span>
+                          </div>
+                          {reg.zoneNote && (
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                              {reg.zoneNote}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingTop: 8 }}>
+                          용도지역 정보 없음
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 행위 제한 구역 */}
+                  {reg.restrictions.length > 0 && (
+                    <div className="card card-accent">
+                      <SectionHeader title="🚫 행위 제한 구역" />
+                      <div style={{ padding: '8px 24px 16px' }}>
+                        {reg.restrictions.map((r, i) => (
+                          <div key={i} className="info-row">
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>• {r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 토지 특성 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="🌱 토지 특성" />
+                    <div style={{ padding: '0 24px 16px' }}>
+                      {[
+                        { label: 'PNU',       value: reg.pnu || '-' },
+                        { label: '지목',       value: reg.landCategory || '-' },
+                        { label: '이용현황',   value: reg.landUseStatus || '-' },
+                        { label: '지형고저',   value: reg.terrain || '-' },
+                        { label: '농지 여부',  value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음',
+                          cls: reg.isFarmland ? 'orange' : '' },
+                        { label: '임야 여부',  value: reg.isForest ? '임야 (전용허가 필요)' : '해당없음',
+                          cls: reg.isForest ? 'orange' : '' },
+                      ].map((row, i) => (
+                        <div className="info-row" key={i}>
+                          <span className="info-row-label">{row.label}</span>
+                          <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>
+                            {row.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 한전 계통연계 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="⚡ 한전 계통연계 신청" />
+                    <div style={{ padding: '12px 24px 20px' }}>
+                      <div style={{
+                        background: '#ebf8ff', border: '1px solid #bee3f8',
+                        borderRadius: 8, padding: '14px 16px', marginBottom: 12,
+                        fontSize: 13, color: '#2c5282', lineHeight: 1.7,
+                      }}>
+                        <strong>계통연계 검토는 필수입니다.</strong> 한전 배전설비 용량·거리에 따라
+                        연계 가능 여부와 공사비가 달라집니다.
+                        접속가능용량 조회 후 설치 규모를 결정하세요.
+                      </div>
+                      <a
+                        href={reg.kepcoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary"
+                        style={{ display: 'inline-block', padding: '10px 24px', textDecoration: 'none', fontSize: 14 }}
+                      >
+                        ⚡ 한전 전력계통 접속신청 바로가기
+                      </a>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ════ 탭 5: AI 종합 평가 ════ */}
         {activeTab === 'ai' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card card-accent">
