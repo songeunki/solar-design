@@ -61,7 +61,7 @@ export default function CompareAnalysis() {
         setMessage(data.message ?? '');
         if (data.markers) setMarkers(data.markers);
       } else if (data.type === 'result') {
-        setResults(data.results);
+        setResults(data.data.results);
         setStatus('done');
         setStep(5);
       } else if (data.type === 'error') {
@@ -188,7 +188,7 @@ export default function CompareAnalysis() {
                     style={{ background: i === 0 ? 'var(--blue)' : 'var(--orange)' }}
                   />
                   <span className="section-title">
-                    건물 {i + 1}: {r.building?.name || r.address}
+                    건물 {i + 1}: {r.address}
                   </span>
                 </div>
 

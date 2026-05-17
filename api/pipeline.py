@@ -188,7 +188,7 @@ def run_compare_pipeline(
     from analyzer.roof_analyzer import RoofAnalyzer
     from designer.electrical import ElectricalDesigner
     from designer.structural import StructuralDesigner
-    from output.report_generator import ComparisonReportGenerator
+    from output.report_generator import ComparisonReportGenerator, ReportGenerator
 
     n       = len(addresses)
     # 전체 스텝: 건물당 5단계 + 비교보고서 1단계
@@ -201,7 +201,9 @@ def run_compare_pipeline(
         if on_progress:
             on_progress(current, total, msg)
 
-    results = []
+    raw_for_report = []   # ComparisonReportGenerator용 도메인 객체
+    formatted      = []   # 프론트엔드 표시용 구조화 데이터
+
     for i, address in enumerate(addresses, 1):
         prefix = f"[{i}/{n}] {address[:20]}"
 
@@ -220,15 +222,66 @@ def run_compare_pipeline(
         structural = StructuralDesigner().design(roof, electrical)
 
         p(f"{prefix} — 보고서 생성")
-        results.append(dict(
+        solar_altitude_deg = _calc_solar_altitude(location.lat)
+        report = ReportGenerator().generate(
+            address, building, roof, electrical, structural,
+            lat=location.lat, lng=location.lng,
+            monthly_irradiance=weather.monthly_irradiance,
+            solar_altitude_deg=solar_altitude_deg,
+        )
+
+        ec             = report.summary.get("경제성", {})
+        install_cost   = ec.get("예상설치비_만원", 0) * 10_000
+        yearly_revenue = round(ec.get("연간절감액_만원", 0) * 10_000)
+        rec_revenue    = round(ec.get("연간REC수익_만원", 0) * 10_000)
+        payback_year   = ec.get("단순회수기간_년", 0)
+        net_profit_20y = round((yearly_revenue + rec_revenue) * 20 - install_cost)
+
+        raw_for_report.append(dict(
             address=address, building=building, roof=roof,
             electrical=electrical, structural=structural,
         ))
+        formatted.append({
+            "address": address,
+            "building": {
+                "address":     address,
+                "floor":       building.floors,
+                "archArea":    building.extra.get("arch_area_m2") or building.roof_area_m2,
+                "roofType":    building.roof_type,
+                "purpose":     building.extra.get("purpose", ""),
+                "irradiation": round(sum(weather.monthly_irradiance), 1),
+            },
+            "system": {
+                "panelCount":  electrical.panel_count,
+                "totalKw":     electrical.total_capacity_kw,
+                "inverterKw":  electrical.inverter_capacity_kw,
+                "yearlyTotal": electrical.annual_generation_kwh,
+                "monthlyAvg":  round(electrical.annual_generation_kwh / 12),
+            },
+            "financial": {
+                "installCost":   install_cost,
+                "yearlyRevenue": yearly_revenue,
+                "recRevenue":    rec_revenue,
+                "paybackYear":   payback_year,
+                "netProfit20y":  net_profit_20y,
+            },
+            "monthly_data": [
+                {
+                    "month":          _MONTHS_KR[j],
+                    "kwh":            electrical.monthly_generation_kwh[j],
+                    "irradiation":    weather.monthly_irradiance[j],
+                    "solar_altitude": solar_altitude_deg[j],
+                }
+                for j in range(12)
+            ],
+            "report_url": _to_url(report.file_path),
+            "pdf_url":    _to_url(report.pdf_path),
+        })
 
     p("비교 보고서 생성")
-    report = ComparisonReportGenerator().generate(results)
+    compare_report = ComparisonReportGenerator().generate(raw_for_report)
 
     return {
-        "html_path": _to_url(report.file_path),
-        "addresses": report.addresses,
+        "results":     formatted,
+        "compare_url": _to_url(compare_report.file_path),
     }
