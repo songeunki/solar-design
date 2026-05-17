@@ -44,7 +44,8 @@ export default function PanelLayoutViewer({ layout, lat = 37.5 }) {
   const toX = (lng) => PAD.left  + ((lng  - minLng) / lngR) * drawW;
   const toY = (lat) => PAD.top   + ((maxLat - lat)  / latR) * drawH;
 
-  const roofPts = (roof_polygon ?? []).map(p => `${toX(p.lng)},${toY(p.lat)}`).join(' ');
+  const roofPts   = (roof_polygon ?? []).map(p => `${toX(p.lng)},${toY(p.lat)}`).join(' ');
+  const azimuthDeg = stats.azimuth_deg ?? 180;
   const pxW = Math.max(2, (pw / lngR) * drawW);
   const pxH = Math.max(2, (ph / latR) * drawH);
 
@@ -196,6 +197,32 @@ export default function PanelLayoutViewer({ layout, lat = 37.5 }) {
             <polygon points="0,11 3,-4 0,-2 -3,-4" fill="#cbd5e1" />
             <text y="-13" textAnchor="middle" fontSize="8" fontWeight="700" fill="#1E6FD9">N</text>
           </g>
+
+          {/* 패널 방위각 화살표 — 중앙에서 방위각 방향으로 */}
+          {(() => {
+            const cx = SVG_W / 2, cy = SVG_H / 2;
+            const L  = 36;
+            // SVG 좌표계: 위=북, 아래=남, 우=동
+            // 방위각 0=북→위(-Y), 90=동→우(+X), 180=남→아래(+Y)
+            const rad = (azimuthDeg - 90) * Math.PI / 180; // SVG: 0°=우 기준
+            // 실제 방위각: 북=0°, 시계방향. SVG에서 북=-Y 방향이므로 rad = az * π/180 - π/2
+            const azRad = azimuthDeg * Math.PI / 180;
+            const ex = cx + L * Math.sin(azRad);
+            const ey = cy - L * Math.cos(azRad);
+            const hx1 = ex - 8 * Math.sin(azRad - 0.4);
+            const hy1 = ey + 8 * Math.cos(azRad - 0.4);
+            const hx2 = ex - 8 * Math.sin(azRad + 0.4);
+            const hy2 = ey + 8 * Math.cos(azRad + 0.4);
+            return (
+              <g opacity="0.75">
+                <line x1={cx} y1={cy} x2={ex} y2={ey} stroke="#dc2626" strokeWidth="2" strokeDasharray="4,2" />
+                <polygon points={`${ex},${ey} ${hx1},${hy1} ${hx2},${hy2}`} fill="#dc2626" />
+                <text x={cx} y={cy - 5} textAnchor="middle" fontSize="8" fill="#dc2626" fontWeight="700">
+                  {azimuthDeg}°
+                </text>
+              </g>
+            );
+          })()}
 
           {/* 스케일바 */}
           <g transform={`translate(${PAD.left + 4}, ${SVG_H - 28})`}>

@@ -168,25 +168,46 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     grid.material.transparent = true;
     scene.add(grid);
 
-    // ── 건물 본체 + 지붕을 하나의 그룹으로: azimuth_deg만큼 Y축 회전 ────
-    // 좌표계: X=동(+)/서(-), Y=위(+), Z=남(+)/북(-)
-    // 남향(azimuth=180°) → 회전 0°, SE향(135°) → +45°, SW향(225°) → -45°
+    // ── 건물 본체 ─────────────────────────────────────────────────────
+    // OSM 폴리곤이 있으면 ExtrudeGeometry로 실제 모양, 없으면 직사각형 박스 폴백
     const buildingGroup = new THREE.Group();
-    buildingGroup.rotation.y = (azimuthDeg - 180) * DEG;
+    const osmPolygon    = building.polygon; // [[lon, lat], ...] or null
 
-    const bldGeo  = new THREE.BoxGeometry(DX, bH, DZ);
-    const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
-    const bldMesh = new THREE.Mesh(bldGeo, bldMat);
-    bldMesh.position.y    = bH / 2;
-    bldMesh.castShadow    = true;
-    bldMesh.receiveShadow = true;
-    buildingGroup.add(bldMesh);
-
-    const edgesGeo = new THREE.EdgesGeometry(bldGeo);
-    const edgeMat  = new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.4 });
-    const edgeLine = new THREE.LineSegments(edgesGeo, edgeMat);
-    edgeLine.position.y = bH / 2;
-    buildingGroup.add(edgeLine);
+    if (osmPolygon && osmPolygon.length >= 3) {
+      // 실제 건물 폴리곤 기반 3D 모델
+      // shape XY: x=동서(경도), y=남북(위도) → rotateX(-π/2) 후 XZ 지면, Y=위
+      const pts2D = osmPolygon.map(([lng, lat]) => new THREE.Vector2(
+        (lng - center_lng) * mPerDegLng,
+        (lat - center_lat) * M_PER_DEG_LAT,
+      ));
+      const shape  = new THREE.Shape(pts2D);
+      const extGeo = new THREE.ExtrudeGeometry(shape, { depth: bH, bevelEnabled: false });
+      extGeo.rotateX(-Math.PI / 2); // XY→XZ(지면), +Z(extrude)→+Y(위)
+      const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
+      const bldMesh = new THREE.Mesh(extGeo, bldMat);
+      bldMesh.castShadow    = true;
+      bldMesh.receiveShadow = true;
+      buildingGroup.add(bldMesh);
+      buildingGroup.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(extGeo),
+        new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.35 }),
+      ));
+    } else {
+      // 폴백: 직사각형 박스 + 방위각 회전
+      buildingGroup.rotation.y = (azimuthDeg - 180) * DEG;
+      const bldGeo  = new THREE.BoxGeometry(DX, bH, DZ);
+      const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
+      const bldMesh = new THREE.Mesh(bldGeo, bldMat);
+      bldMesh.position.y    = bH / 2;
+      bldMesh.castShadow    = true;
+      bldMesh.receiveShadow = true;
+      buildingGroup.add(bldMesh);
+      const edgesGeo = new THREE.EdgesGeometry(bldGeo);
+      const edgeMat  = new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.4 });
+      const edgeLine = new THREE.LineSegments(edgesGeo, edgeMat);
+      edgeLine.position.y = bH / 2;
+      buildingGroup.add(edgeLine);
+    }
 
     // ── 지붕 형상 ─────────────────────────────────────────────────────
     // 공용 헬퍼: 평면 배열 → BufferGeometry

@@ -42,22 +42,24 @@ class BuildingAPI:
 
     def get_building_info(self, location: Location) -> BuildingInfo:
         # OSM으로 건물 형상 사전 획득 (면적 + 방위각 + EW/NS 치수)
-        osm_area, osm_azimuth, osm_ew_m, osm_ns_m = _building_info_from_osm(
+        osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = _building_info_from_osm(
             location.lat, location.lng
         )
         warnings.warn(
             f"[BuildingAPI] OSM 결과: azimuth={osm_azimuth}° "
-            f"EW={osm_ew_m}m NS={osm_ns_m}m ({location.address})",
+            f"EW={osm_ew_m}m NS={osm_ns_m}m polygon={len(osm_polygon) if osm_polygon else 0}pts ({location.address})",
             stacklevel=2,
         )
 
         def _apply_osm(info: BuildingInfo) -> BuildingInfo:
-            info.roof_azimuth_deg        = osm_azimuth
+            info.roof_azimuth_deg          = osm_azimuth
             info.extra["osm_azimuth_deg"]  = osm_azimuth
             if osm_ew_m:
                 info.extra["building_ew_m"] = osm_ew_m
             if osm_ns_m:
                 info.extra["building_ns_m"] = osm_ns_m
+            if osm_polygon:
+                info.extra["osm_polygon"] = [[c[0], c[1]] for c in osm_polygon]
             return info
 
         # 1단계: PNU 확보
@@ -459,16 +461,16 @@ def _building_info_from_osm(
             else:
                 azimuth = _azimuth_from_polygon(coords)
 
-            return (round(area, 1) if area > 5 else None), azimuth, ew_m, ns_m
+            return (round(area, 1) if area > 5 else None), azimuth, ew_m, ns_m, coords
 
     # ── 건물 폴리곤 없음 → 도로 방향 → 기본값 ────────────────────────
     azimuth = _azimuth_from_road(lat, lng) or _DEFAULT_AZIMUTH
-    return None, azimuth, None, None
+    return None, azimuth, None, None, None
 
 
 def _building_area_from_osm(lat: float, lng: float, radius_m: int = 50) -> float | None:
     """하위 호환용 — 면적만 반환."""
-    area, _, _, _ = _building_info_from_osm(lat, lng, radius_m)
+    area, _, _, _, _ = _building_info_from_osm(lat, lng, radius_m)
     return area
 
 

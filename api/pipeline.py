@@ -151,6 +151,7 @@ def run_pipeline(
             "structure":     building.structure or "",
             "purpose":       building.extra.get("purpose", ""),
             "irradiation":   round(sum(weather.monthly_irradiance), 1),
+            "polygon":       building.extra.get("osm_polygon"),  # [[lon, lat], ...] or None
         },
         "system": {
             "panelCount":   electrical.panel_count,
