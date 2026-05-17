@@ -11,7 +11,7 @@ router = APIRouter(tags=["ai"])
 
 _GEMINI_STREAM_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-1.5-flash:streamGenerateContent?alt=sse&key={key}"
+    "gemini-2.5-flash:streamGenerateContent?alt=sse&key={key}"
 )
 
 # ── 요청 모델 ─────────────────────────────────────────────────────────────────
