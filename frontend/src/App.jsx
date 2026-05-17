@@ -3,8 +3,14 @@ import './index.css';
 import './App.css';
 import SingleAnalysis from './components/SingleAnalysis';
 import CompareAnalysis from './components/CompareAnalysis';
+import AdminPage from './components/AdminPage';
 
 export default function App() {
+  // /admin 경로면 관리자 페이지 렌더링
+  if (window.location.pathname === '/admin') {
+    return <AdminPage />;
+  }
+
   const [activeTab, setActiveTab] = useState('single');
 
   return (
