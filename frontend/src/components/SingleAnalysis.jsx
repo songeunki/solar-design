@@ -117,8 +117,21 @@ export default function SingleAnalysis({ onResultChange }) {
 
       {/* ── 웰컴 스크린 ── */}
       {status === 'idle' && (
-        <div className="welcome-screen">
-          <div className="welcome-hero">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 'calc(100dvh - 100px)',
+          width: '100%',
+        }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: '16px',
+            padding: '0 24px',
+          }}>
             <div className="welcome-icon-wrap">
               <i className="fa-solid fa-solar-panel"></i>
             </div>
