@@ -186,41 +186,53 @@ export default function PanelLayout3D({ layout, building = {}, lat = 37.5 }) {
     const buildingGroup = new THREE.Group();
 
     if (osmPolygon && osmPolygon.length >= 3) {
-      // 실제 건물 폴리곤: shape XY(x=동서, y=남북) → mesh.rotation.x=-π/2 로 세움
-      // ★ geometry.rotateX() 는 노멀을 갱신하지 않아 조명이 뒤집힘 → mesh rotation 사용
+      // ── 폴리곤 건물 ──────────────────────────────────────────────────
+      // shape XY(x=동서, y=남북) → mesh.rotation.x=-π/2 → XZ 지면, depth→Y(위)
       const pts2D = osmPolygon.map(([lng, plat]) => new THREE.Vector2(
         (lng  - center_lng) * mPerDegLng,
         (plat - center_lat) * M_PER_DEG_LAT,
       ));
       const shape  = new THREE.Shape(pts2D);
       const extGeo = new THREE.ExtrudeGeometry(shape, { depth: bH, bevelEnabled: false });
-      // DoubleSide: CCW/CW 권선 방향에 무관하게 양면 렌더링
+
+      // ★ z축이 위를 향하게: CW 폴리곤이면 -Z로 압출될 수 있으므로
+      //   bounding box를 확인해 z_min → 0 으로 translate, z 범위가 항상 [0, bH]가 됨
+      extGeo.computeBoundingBox();
+      const zMin = extGeo.boundingBox.min.z;
+      if (Math.abs(zMin) > 0.001) extGeo.translate(0, 0, -zMin);
+
       const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0, side: THREE.DoubleSide });
       const bldMesh = new THREE.Mesh(extGeo, bldMat);
-      bldMesh.rotation.x    = -Math.PI / 2;  // ★ mesh 회전: shape XY→XZ(지면), depth(Z)→Y(위)
+      // mesh.rotation.x = -π/2: shape XY → XZ(지면), local Z(압출방향) → world Y(위)
+      bldMesh.rotation.x    = -Math.PI / 2;
+      bldMesh.position.y    = 0;
       bldMesh.castShadow    = true;
       bldMesh.receiveShadow = true;
       buildingGroup.add(bldMesh);
-      // 엣지라인도 같은 회전 적용
+
       const edgeMesh = new THREE.LineSegments(
         new THREE.EdgesGeometry(extGeo),
         new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.35 }),
       );
       edgeMesh.rotation.x = -Math.PI / 2;
+      edgeMesh.position.y = 0;
       buildingGroup.add(edgeMesh);
+
     } else {
-      // 폴백: 직사각형 박스 + 방위각 회전
+      // ── 폴백: 직사각형 박스, 방위각 회전, 지면(y=0)에서 위로 솟음 ──
       buildingGroup.rotation.y = (azimuthDeg - 180) * DEG;
       const bldGeo  = new THREE.BoxGeometry(DX, bH, DZ);
       const bldMat  = new THREE.MeshLambertMaterial({ color: 0xc8d4e0 });
       const bldMesh = new THREE.Mesh(bldGeo, bldMat);
+      // BoxGeometry는 중심이 y=0 → position.y = bH/2 로 지면에서 위로 솟게
       bldMesh.position.y    = bH / 2;
       bldMesh.castShadow    = true;
       bldMesh.receiveShadow = true;
       buildingGroup.add(bldMesh);
-      const edgesGeo = new THREE.EdgesGeometry(bldGeo);
-      const edgeMat  = new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.4 });
-      const edgeLine = new THREE.LineSegments(edgesGeo, edgeMat);
+      const edgeLine = new THREE.LineSegments(
+        new THREE.EdgesGeometry(bldGeo),
+        new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.4 }),
+      );
       edgeLine.position.y = bH / 2;
       buildingGroup.add(edgeLine);
     }
