@@ -108,30 +108,30 @@ export default function AdminPage() {
   // ── 헤더 ─────────────────────────────────────────────────────────────────────
   const Header = () => (
     <header style={{
-      background: 'var(--blue)', height: 60, padding: '0 32px',
+      background: 'var(--blue)', height: 60, padding: '0 24px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       position: 'sticky', top: 0, zIndex: 100,
       boxShadow: '0 2px 12px rgba(30,111,217,0.25)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <div style={{
           width: 32, height: 32, background: 'rgba(255,255,255,0.2)',
           borderRadius: 8, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontSize: 18,
+          justifyContent: 'center', fontSize: 18, flexShrink: 0,
         }}><i className="fa-solid fa-solar-panel" style={{color:'white', marginRight:0}}></i></div>
-        <span style={{ color: 'white', fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>
-          AI 태양광 입지 분석 자동화 프로그램
+        <span style={{ color: 'white', fontSize: 17, fontWeight: 700, letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+          SolarDesign AI
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <span style={{
           background: 'rgba(255,255,255,0.15)', color: 'white',
           fontSize: 12, padding: '4px 12px', borderRadius: 20,
-          border: '1px solid rgba(255,255,255,0.3)',
+          border: '1px solid rgba(255,255,255,0.3)', whiteSpace: 'nowrap',
         }}>
           <i className="fa-solid fa-gear"></i> 관리자 설정
         </span>
-        <a href="/" style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, textDecoration: 'none' }}>
+        <a href="/" style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
           <i className="fa-solid fa-arrow-left"></i> 메인으로
         </a>
       </div>
