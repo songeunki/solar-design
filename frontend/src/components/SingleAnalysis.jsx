@@ -1,7 +1,7 @@
 ﻿import { useState, useRef, useCallback, useEffect } from 'react';
 import AddressInput from './AddressInput';
 import ProgressBar from './ProgressBar';
-import ResultTabs from './ResultTabs';
+import ResultTabs, { TABS } from './ResultTabs';
 import KakaoMap from './KakaoMap';
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
@@ -21,6 +21,7 @@ export default function SingleAnalysis({ onResultChange }) {
   const [errorMsg, setErrorMsg]           = useState('');
   const [markerPos, setMarkerPos]         = useState(null);
   const [buildingPolygon, setBuildingPolygon] = useState(null);
+  const [activeTab, setActiveTab]         = useState('location');
 
   const wsRef     = useRef(null);
   const statusRef = useRef(status);
@@ -225,7 +226,7 @@ export default function SingleAnalysis({ onResultChange }) {
             ))}
           </div>
 
-          {/* 2컬럼: 지도 + 탭 */}
+          {/* 2컬럼: [지도 + 탭바] | [탭 콘텐츠] */}
           <div className="dashboard-body">
             <div className="dashboard-map">
               <KakaoMap
@@ -234,6 +235,19 @@ export default function SingleAnalysis({ onResultChange }) {
                 buildingPolygon={buildingPolygon}
                 height={480}
               />
+              {/* 탭바 — 지도 하단 */}
+              <div className="result-tab-bar" style={{ marginTop: 8 }}>
+                {TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    className={`result-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    <i className={tab.icon}></i>
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="dashboard-tabs">
               <ResultTabs
@@ -242,6 +256,8 @@ export default function SingleAnalysis({ onResultChange }) {
                 buildingPolygon={buildingPolygon}
                 onMapClick={(addr) => startAnalysis({ address: addr })}
                 onReset={handleReset}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
               />
             </div>
           </div>

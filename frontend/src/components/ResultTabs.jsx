@@ -4,7 +4,7 @@ import SolarAltitudeChart from './SolarAltitudeChart';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
 
-const TABS = [
+export const TABS = [
   { id: 'location',   icon: 'fa-solid fa-location-dot',    label: '입지' },
   { id: 'revenue',    icon: 'fa-solid fa-chart-line',       label: '수익' },
   { id: 'design',     icon: 'fa-solid fa-drafting-compass', label: '설계' },
@@ -237,8 +237,11 @@ function SectionHeader({ title, badge, right }) {
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
-export default function ResultTabs({ result, markerPos, buildingPolygon, onMapClick, onReset }) {
-  const [activeTab, setActiveTab]   = useState('location');
+export default function ResultTabs({ result, markerPos, buildingPolygon, onMapClick, onReset,
+                                    activeTab: externalTab, onTabChange }) {
+  const [internalTab, setInternalTab] = useState('location');
+  const activeTab  = externalTab  ?? internalTab;
+  const setActiveTab = onTabChange ?? setInternalTab;
   const [aiState,   setAiState]     = useState('idle');   // idle|loading|retrying|streaming|done|error
   const [aiText,    setAiText]      = useState('');
   const [aiRetry,   setAiRetry]     = useState(null);    // {attempt, total, delay}
@@ -357,17 +360,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
           </div>
         </div>
       )}
-
-      {/* ── 탭 바 ─────────────────────────────────────────────────────────── */}
-      <div className="result-tab-bar">
-        {TABS.map(tab => (
-          <button key={tab.id} className={`result-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}>
-            <i className={tab.icon}></i>
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
 
       {/* ── 탭 콘텐츠 ────────────────────────────────────────────────────── */}
       <div key={activeTab} className="result-tab-panel">
@@ -501,28 +493,27 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
         {/* ════ 탭 3: 설계 분석 ════ */}
         {activeTab === 'design' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* 건물 정보 + 배치 상세 */}
-            <div className="result-main-grid">
-              <BuildingInfo building={building} system={system} />
+            {/* 건물 정보 + 시스템 구성 (BuildingInfo에 두 카드 포함) — 전체 너비 */}
+            <BuildingInfo building={building} system={system} />
 
-              <div className="card card-accent">
-                <SectionHeader title="📐 배치 상세" />
-                <div style={{ padding: '0 24px 16px' }}>
-                  {[
-                    { label: '총 패널 수',       value: panel_layout?.stats?.total_panels ?? '-' },
-                    { label: '활성 패널',         value: panel_layout?.stats?.active_panels ?? '-',  cls: 'blue' },
-                    { label: '패널 방위각',        value: panel_layout?.stats?.azimuth_deg != null ? `${panel_layout.stats.azimuth_deg}°` : '-' },
-                    { label: '경사각(tilt)',       value: panel_layout?.stats?.tilt_deg != null ? `${panel_layout.stats.tilt_deg}°` : '-' },
-                    { label: '행 × 열',           value: `${panel_layout?.stats?.row_count ?? '-'} × ${panel_layout?.stats?.col_count ?? '-'}` },
-                    { label: '행 이격거리',        value: panel_layout?.stats?.row_spacing_m ? `${panel_layout.stats.row_spacing_m}m` : '-' },
-                    { label: '지붕 형상',          value: panel_layout?.stats?.roof_shape ?? '-' },
-                  ].map((row, i) => (
-                    <div className="info-row" key={i}>
-                      <span className="info-row-label">{row.label}</span>
-                      <span className={`info-row-value ${row.cls || ''}`}>{String(row.value)}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* 배치 상세 — 전체 너비 카드 */}
+            <div className="card card-accent">
+              <SectionHeader title="📐 배치 상세" />
+              <div style={{ padding: '0 24px 16px' }}>
+                {[
+                  { label: '총 패널 수',   value: panel_layout?.stats?.total_panels ?? '-' },
+                  { label: '활성 패널',    value: panel_layout?.stats?.active_panels ?? '-', cls: 'blue' },
+                  { label: '패널 방위각',  value: panel_layout?.stats?.azimuth_deg != null ? `${panel_layout.stats.azimuth_deg}°` : '-' },
+                  { label: '경사각(tilt)', value: panel_layout?.stats?.tilt_deg != null ? `${panel_layout.stats.tilt_deg}°` : '-' },
+                  { label: '행 × 열',     value: `${panel_layout?.stats?.row_count ?? '-'} × ${panel_layout?.stats?.col_count ?? '-'}` },
+                  { label: '행 이격거리',  value: panel_layout?.stats?.row_spacing_m ? `${panel_layout.stats.row_spacing_m}m` : '-' },
+                  { label: '지붕 형상',    value: panel_layout?.stats?.roof_shape ?? '-' },
+                ].map((row, i) => (
+                  <div className="info-row" key={i}>
+                    <span className="info-row-label">{row.label}</span>
+                    <span className={`info-row-value ${row.cls || ''}`}>{String(row.value)}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
