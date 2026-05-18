@@ -10,6 +10,7 @@ const TABS = [
   { id: 'design',     icon: 'fa-solid fa-drafting-compass', label: '설계' },
   { id: 'regulation', icon: 'fa-solid fa-scale-balanced',   label: '규제' },
   { id: 'ai',         icon: 'fa-solid fa-robot',            label: 'AI' },
+  { id: 'report',     icon: 'fa-solid fa-file-lines',       label: '보고서' },
 ];
 
 // ── 공통 KPI 카드 ────────────────────────────────────────────────────────────
@@ -525,10 +526,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
               </div>
             </div>
 
-            {/* 다운로드 */}
-            <div className="card">
-              <DownloadButtons reportUrl={report_url} pdfUrl={pdf_url} />
-            </div>
           </div>
         )}
 
@@ -834,6 +831,154 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
 
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ════ 탭 6: 보고서 ════ */}
+        {activeTab === 'report' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* 프로젝트 개요 */}
+            <div className="card card-accent">
+              <SectionHeader title="📋 프로젝트 개요" />
+              <div style={{ padding: '0 24px 16px' }}>
+                {[
+                  { label: '분석 주소',   value: building.address || '-' },
+                  { label: '분석일',      value: new Date().toLocaleDateString('ko-KR') },
+                  { label: '건물 용도',   value: building.roofType || '-' },
+                  { label: '지붕 형상',   value: building.roofShape || '-' },
+                  { label: '층수',        value: building.floor ? `${building.floor}층` : '-' },
+                  { label: '건축면적',    value: building.archArea ? `${building.archArea.toLocaleString()} m²` : '-' },
+                ].map((row, i) => (
+                  <div className="info-row" key={i}>
+                    <span className="info-row-label">{row.label}</span>
+                    <span className="info-row-value">{String(row.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 핵심 지표 요약 */}
+            <div className="card card-accent">
+              <SectionHeader title="⚡ 핵심 지표 요약" />
+              <div style={{ padding: '0 24px 16px' }}>
+                <div className="kpi-grid" style={{ marginBottom: 12 }}>
+                  {[
+                    { label: '설치 용량',  value: system.totalKw ?? '-',                                              unit: 'kW',  color: 'blue'   },
+                    { label: '연간 발전량', value: system.yearlyTotal ? system.yearlyTotal.toLocaleString() : '-',      unit: 'kWh', color: 'orange' },
+                    { label: '연간 수익',  value: financial.yearlyRevenue ? `${Math.round(financial.yearlyRevenue/10000).toLocaleString()}만` : '-', unit: '원', color: 'green' },
+                    { label: '투자 회수',  value: financial.paybackYear ?? '-',                                        unit: '년',  color: 'blue'   },
+                  ].map((k, i) => <KpiCard key={i} {...k} />)}
+                </div>
+                {[
+                  { label: '총 설치비용',   value: financial.installCost   ? `${Math.round(financial.installCost/10000).toLocaleString()}만원`   : '-' },
+                  { label: '20년 순수익',   value: financial.netProfit20y  ? `${Math.round(financial.netProfit20y/10000).toLocaleString()}만원`  : '-' },
+                  { label: '패널 수',       value: system.panelCount ? `${system.panelCount}매 × 640W` : '-' },
+                  { label: '인버터 용량',   value: system.inverterKw ? `${system.inverterKw} kW` : '-' },
+                ].map((row, i) => (
+                  <div className="info-row" key={i}>
+                    <span className="info-row-label">{row.label}</span>
+                    <span className="info-row-value blue">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 설계 요약 */}
+            <div className="card card-accent">
+              <SectionHeader title="📐 설계 요약" />
+              <div style={{ padding: '0 24px 16px' }}>
+                {[
+                  { label: '패널 방위각',  value: panel_layout?.stats?.azimuth_deg != null ? `${panel_layout.stats.azimuth_deg}°` : '-' },
+                  { label: '경사각',       value: panel_layout?.stats?.tilt_deg != null    ? `${panel_layout.stats.tilt_deg}°`    : '-' },
+                  { label: '행 × 열',     value: `${panel_layout?.stats?.row_count ?? '-'} × ${panel_layout?.stats?.col_count ?? '-'}` },
+                  { label: '행 이격거리',  value: panel_layout?.stats?.row_spacing_m ? `${panel_layout.stats.row_spacing_m}m` : '-' },
+                  { label: '지붕 형상',    value: panel_layout?.stats?.roof_shape ?? '-' },
+                ].map((row, i) => (
+                  <div className="info-row" key={i}>
+                    <span className="info-row-label">{row.label}</span>
+                    <span className="info-row-value">{String(row.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 규제 요약 */}
+            {regulation && (
+              <div className="card card-accent">
+                <SectionHeader title="⚖️ 규제 검토 요약" />
+                <div style={{ padding: '0 24px 16px' }}>
+                  {[
+                    { label: '리스크 등급',  value: regulation.riskLevel || '-',      cls: regulation.riskLevel === '낮음' ? 'green' : regulation.riskLevel === '높음' ? 'orange' : '' },
+                    { label: '용도지역',     value: regulation.zones?.join(', ') || '-' },
+                    { label: '입지 가능성',  value: regulation.zoneFeasibility || '-' },
+                    { label: '지목',         value: regulation.landCategory || '-' },
+                  ].map((row, i) => (
+                    <div className="info-row" key={i}>
+                      <span className="info-row-label">{row.label}</span>
+                      <span className={`info-row-value ${row.cls || ''}`}>{row.value}</span>
+                    </div>
+                  ))}
+                  {regulation.riskReasons?.length > 0 && (
+                    <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {regulation.riskReasons.join(' · ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AI 평가 안내 */}
+            <div className="card card-accent">
+              <SectionHeader title="🤖 AI 종합 평가" />
+              <div style={{ padding: '12px 24px 16px', fontSize: 13, color: 'var(--text-muted)' }}>
+                <i className="fa-solid fa-circle-info" style={{ marginRight: 6, color: 'var(--blue)' }}></i>
+                AI 탭에서 Gemini 기반 종합 평가를 확인하세요.
+                <button
+                  className="btn btn-sm btn-outline"
+                  style={{ marginLeft: 12 }}
+                  onClick={() => setActiveTab('ai')}
+                >
+                  AI 탭으로 이동
+                </button>
+              </div>
+            </div>
+
+            {/* 다운로드 / 인쇄 */}
+            <div className="card card-accent">
+              <SectionHeader title="📥 보고서 저장" />
+              <div style={{ padding: '16px 24px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                {report_url && (
+                  <a
+                    href={report_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <i className="fa-solid fa-file-lines"></i> 웹 보고서 보기
+                  </a>
+                )}
+                {pdf_url && (
+                  <a
+                    href={pdf_url}
+                    download
+                    className="btn btn-outline"
+                    style={{ textDecoration: 'none', borderColor: 'var(--orange)', color: 'var(--orange)' }}
+                  >
+                    <i className="fa-solid fa-file-pdf"></i> PDF 다운로드
+                  </a>
+                )}
+                <button
+                  className="btn btn-outline"
+                  onClick={() => window.print()}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  <i className="fa-solid fa-print"></i> 인쇄
+                </button>
+              </div>
+            </div>
+
           </div>
         )}
 
