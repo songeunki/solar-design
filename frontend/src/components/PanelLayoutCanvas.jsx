@@ -1,218 +1,246 @@
 /**
- * PanelLayoutCanvas — Canvas 2D 패널 배치도
- * - bounding box 격자 순회 + 중심점 PiP 필터로 패널 배치
- * - Canvas clip()으로 폴리곤 외부 픽셀 차단 (이중 보호)
+ * PanelLayoutCanvas — Turf.js 기반 정확한 폴리곤 내부 패널 배치
+ *
+ * 핵심 수정:
+ *   - bbox를 roof_polygon 좌표만으로 계산 (panel corners 제외)
+ *     → 이전 버전은 panel.lat+ph 등 축-정렬 범위를 포함해 회전 건물에서 bbox가
+ *       실제 지붕보다 훨씬 커졌고, 이것이 폴리곤이 삼각형처럼 보이게 만든 원인.
+ *   - Mercator 위도 보정 포함 등방 스케일 변환
+ *   - Turf.js booleanPointInPolygon 으로 PiP 판별
+ *   - 패널 corners(방위각 회전 적용) 사용, 없으면 fillRect 폴백
  */
 import { useEffect, useRef, useState } from 'react';
+import { polygon as turfPolygon, point as turfPoint, booleanPointInPolygon } from '@turf/turf';
 
 const M_PER_DEG_LAT = 111320;
-const PAD = 44;
+const PAD            = 44;
 
-// Ray-casting Point-in-Polygon (px 좌표계)
-function isInsidePolygon(point, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x, yi = polygon[i].y;
-    const xj = polygon[j].x, yj = polygon[j].y;
-    const intersect = ((yi > point.y) !== (yj > point.y))
-      && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
+// ── Mercator 투영 기반 위경도 → Canvas px 변환 ──────────────────────────────
+// bbox: { minLat, maxLat, minLng, maxLng }  (roof_polygon 좌표만으로 구성)
+function lngLatToCanvas(lng, lat, bbox, cW, cH, pad = PAD) {
+  const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+  const centerLng = (bbox.minLng + bbox.maxLng) / 2;
+
+  // 위도 1도 ≈ 111320m, 경도 1도 ≈ 111320 × cos(lat) m
+  const mPerDegLng = M_PER_DEG_LAT * Math.cos(centerLat * Math.PI / 180);
+
+  // 실제 콘텐츠 크기(미터) → 캔버스 드로잉 영역에 맞는 등방 스케일
+  const DW = cW - pad * 2;
+  const DH = cH - pad * 2;
+  const contentWm = Math.max((bbox.maxLng - bbox.minLng) * mPerDegLng, 1e-3);
+  const contentHm = Math.max((bbox.maxLat - bbox.minLat) * M_PER_DEG_LAT,  1e-3);
+  const scale = Math.min(DW / contentWm, DH / contentHm) * 0.83;
+
+  return {
+    x: cW / 2 + (lng - centerLng) * mPerDegLng * scale,
+    y: cH / 2 - (lat - centerLat) * M_PER_DEG_LAT * scale,
+  };
 }
 
-function polygonPath(ctx, pts) {
-  ctx.beginPath();
-  pts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
-  ctx.closePath();
-}
-
-// draw() 반환값: 그려진 패널 수
-function draw(canvas, layout) {
-  if (!layout?.panels?.length) return 0;
+// ── 메인 draw 함수 ────────────────────────────────────────────────────────────
+function draw(canvas, layout, onPanelCountChange) {
+  if (!canvas || !layout?.panels?.length) return 0;
 
   const ctx = canvas.getContext('2d');
-  const { roof_polygon, panel_w_deg_lng: pw, panel_h_deg_lat: ph, stats } = layout;
+  const {
+    panels,
+    roof_polygon,
+    panel_w_deg_lng: pw,
+    panel_h_deg_lat: ph,
+    stats,
+  } = layout;
 
-  // ── 디버그: 폴리곤 좌표 확인 ─────────────────────────────────────────
+  // ── 디버그: 폴리곤 좌표 확인 ─────────────────────────────────────────────
   console.log('[PanelLayoutCanvas] roof_polygon 점 개수:', roof_polygon?.length);
-  console.log('[PanelLayoutCanvas] roof_polygon 좌표:', JSON.stringify(roof_polygon));
+  console.log('[PanelLayoutCanvas] roof_polygon:', JSON.stringify(roof_polygon));
+  console.log('[PanelLayoutCanvas] panels 총수:', panels?.length,
+    '/ active:', panels?.filter(p => p.status !== 'buffer').length);
+
+  if (!roof_polygon?.length) {
+    console.warn('[PanelLayoutCanvas] roof_polygon 없음 — 렌더링 중단');
+    return 0;
+  }
 
   const CW = canvas.width, CH = canvas.height;
-  const DW = CW - PAD * 2, DH = CH - PAD * 2;
 
-  // ── 좌표 범위: roof_polygon 우선, 없으면 panels 사용 ──────────────────
-  const srcPts = roof_polygon?.length
-    ? roof_polygon
-    : layout.panels.flatMap(p => p.corners?.length === 4
-        ? p.corners
-        : [{ lat: p.lat, lng: p.lng }, { lat: p.lat + ph, lng: p.lng + pw }]);
+  // ── bbox: roof_polygon 좌표만으로 계산 (핵심 수정) ──────────────────────
+  const rLats = roof_polygon.map(p => p.lat);
+  const rLngs = roof_polygon.map(p => p.lng);
+  const bbox = {
+    minLat: Math.min(...rLats), maxLat: Math.max(...rLats),
+    minLng: Math.min(...rLngs), maxLng: Math.max(...rLngs),
+  };
 
-  const lats = srcPts.map(p => p.lat);
-  const lngs = srcPts.map(p => p.lng);
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
+  // ── 좌표 변환 헬퍼 ───────────────────────────────────────────────────────
+  const toC = (lng, lat) => lngLatToCanvas(lng, lat, bbox, CW, CH, PAD);
 
-  // ── 등방 스케일 변환 ─────────────────────────────────────────────────
-  const mPerDegLng = M_PER_DEG_LAT * Math.cos(centerLat * Math.PI / 180);
-  const contentWm  = Math.max((maxLng - minLng) * mPerDegLng, 1e-3);
-  const contentHm  = Math.max((maxLat - minLat) * M_PER_DEG_LAT, 1e-3);
-  const scale = Math.min(DW / contentWm, DH / contentHm) * 0.82;
+  // ── Turf.js 폴리곤 생성 (PiP 판별용) ────────────────────────────────────
+  const roofCoords = [
+    ...roof_polygon.map(p => [p.lng, p.lat]),
+    [roof_polygon[0].lng, roof_polygon[0].lat], // GeoJSON 닫기
+  ];
+  const turfRoof = turfPolygon([roofCoords]);
 
-  const canvasCX = CW / 2, canvasCY = CH / 2;
-  const toX = lng => canvasCX + (lng - centerLng) * mPerDegLng * scale;
-  const toY = lat => canvasCY - (lat - centerLat) * M_PER_DEG_LAT * scale;
-
-  // ── 지붕 폴리곤 픽셀 좌표 ────────────────────────────────────────────
-  const roofPts = roof_polygon?.length >= 3
-    ? roof_polygon.map(p => ({ x: toX(p.lng), y: toY(p.lat) }))
-    : null;
-
+  // ── 지붕 폴리곤 Canvas px 좌표 ───────────────────────────────────────────
+  const roofPts = roof_polygon.map(p => toC(p.lng, p.lat));
   console.log('[PanelLayoutCanvas] roofPts (px):', JSON.stringify(roofPts));
 
-  // ── 배경 ─────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════
+  // 렌더링
+  // ════════════════════════════════════════════════════════════════════════
+
+  // 배경
   ctx.clearRect(0, 0, CW, CH);
-  const grad = ctx.createLinearGradient(0, 0, CW, CH);
-  grad.addColorStop(0, '#1a2a1a');
-  grad.addColorStop(1, '#1a1a2e');
-  ctx.fillStyle = grad;
+  const bg = ctx.createLinearGradient(0, 0, CW, CH);
+  bg.addColorStop(0, '#1a2a1a');
+  bg.addColorStop(1, '#1a1a2e');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── 지붕 면적 채우기 (연한 색) ───────────────────────────────────────
-  if (roofPts) {
-    polygonPath(ctx, roofPts);
-    ctx.fillStyle = 'rgba(200,190,160,0.15)';
-    ctx.fill();
-  }
+  // 지붕 면적 (연한 배경)
+  ctx.beginPath();
+  roofPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(200,190,160,0.15)';
+  ctx.fill();
 
-  // ── 패널 배치: bounding box 격자 순회 + 중심점 PiP ──────────────────
-  const panelWpx = pw * mPerDegLng * scale;
-  const panelHpx = ph * M_PER_DEG_LAT * scale;
-  const gapPx    = Math.max(1, 0.1 * scale);
-  const stepX    = panelWpx + gapPx;
-  const stepY    = panelHpx + gapPx;
-
-  const bboxMinX = roofPts ? Math.min(...roofPts.map(p => p.x)) : canvasCX - DW / 2;
-  const bboxMaxX = roofPts ? Math.max(...roofPts.map(p => p.x)) : canvasCX + DW / 2;
-  const bboxMinY = roofPts ? Math.min(...roofPts.map(p => p.y)) : canvasCY - DH / 2;
-  const bboxMaxY = roofPts ? Math.max(...roofPts.map(p => p.y)) : canvasCY + DH / 2;
-
+  // ── 패널 렌더링 ─────────────────────────────────────────────────────────
   ctx.save();
-  // Canvas clip으로 폴리곤 외부 픽셀 차단 (이중 보호)
-  if (roofPts) {
-    polygonPath(ctx, roofPts);
-    ctx.clip();
-  }
+
+  // Canvas clip: 폴리곤 외부 픽셀 물리적 차단
+  ctx.beginPath();
+  roofPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+  ctx.closePath();
+  ctx.clip();
 
   let drawnCount = 0;
-  for (let py = bboxMinY; py + panelHpx <= bboxMaxY + gapPx; py += stepY) {
-    for (let px = bboxMinX; px + panelWpx <= bboxMaxX + gapPx; px += stepX) {
-      // 중심점 기준 PiP 판별
-      const centerX = px + panelWpx / 2;
-      const centerY = py + panelHpx / 2;
-      if (roofPts && !isInsidePolygon({ x: centerX, y: centerY }, roofPts)) continue;
+  const activePanels = panels.filter(p => p.status !== 'buffer');
 
-      // 패널 채우기
-      ctx.fillStyle   = 'rgba(37,99,235,0.85)';
-      ctx.strokeStyle = 'rgba(147,197,253,0.85)';
-      ctx.lineWidth   = 0.6;
-      ctx.fillRect(px, py, panelWpx, panelHpx);
-      ctx.strokeRect(px, py, panelWpx, panelHpx);
+  activePanels.forEach(p => {
+    // Turf.js PiP: 패널 중심이 지붕 폴리곤 안에 있는지 확인
+    const centerLng = p.lng + pw / 2;
+    const centerLat = p.lat + ph / 2;
+    if (!booleanPointInPolygon(turfPoint([centerLng, centerLat]), turfRoof)) return;
 
-      // 패널 중앙 세로 구분선 (셀 느낌)
-      ctx.strokeStyle = 'rgba(147,197,253,0.2)';
-      ctx.lineWidth   = 0.35;
+    const isShade = p.status === 'shade';
+    ctx.fillStyle   = isShade ? 'rgba(239,68,68,0.80)'   : 'rgba(59,130,246,0.85)';
+    ctx.strokeStyle = isShade ? 'rgba(252,165,165,0.85)' : 'rgba(147,197,253,0.85)';
+    ctx.lineWidth   = 0.6;
+
+    if (p.corners?.length === 4) {
+      // corners 사용: 방위각 회전이 이미 반영된 4점 폴리곤
+      const cPts = p.corners.map(c => toC(c.lng, c.lat));
       ctx.beginPath();
-      ctx.moveTo(px + panelWpx / 2, py);
-      ctx.lineTo(px + panelWpx / 2, py + panelHpx);
+      cPts.forEach((cpt, i) => i === 0 ? ctx.moveTo(cpt.x, cpt.y) : ctx.lineTo(cpt.x, cpt.y));
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
 
-      drawnCount++;
+      // 패널 중앙 구분선 (셀 느낌)
+      const [sw, se] = cPts;
+      const nw = cPts[3], ne = cPts[2];
+      const mTop = { x: (nw.x + ne.x) / 2, y: (nw.y + ne.y) / 2 };
+      const mBot = { x: (sw.x + se.x) / 2, y: (sw.y + se.y) / 2 };
+      ctx.strokeStyle = isShade ? 'rgba(252,165,165,0.2)' : 'rgba(147,197,253,0.2)';
+      ctx.lineWidth   = 0.3;
+      ctx.beginPath();
+      ctx.moveTo(mTop.x, mTop.y);
+      ctx.lineTo(mBot.x, mBot.y);
+      ctx.stroke();
+    } else {
+      // corners 없을 때: fillRect 폴백
+      const tl = toC(p.lng,      p.lat + ph);
+      const br = toC(p.lng + pw, p.lat);
+      ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+      ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
     }
-  }
+
+    drawnCount++;
+  });
 
   ctx.restore();
-  console.log('[PanelLayoutCanvas] 그려진 패널:', drawnCount, '/ 총 용량:', (drawnCount * 0.64).toFixed(1), 'kW');
 
-  // ── 지붕 외곽선 (패널 위에 그려서 z-order 확보) ──────────────────────
-  if (roofPts) {
-    polygonPath(ctx, roofPts);
-    ctx.strokeStyle = '#FFD700';
-    ctx.lineWidth   = 2.5;
-    ctx.setLineDash([]);
-    ctx.stroke();
+  // ── 지붕 외곽선 (z-order: 패널 위) ──────────────────────────────────────
+  ctx.beginPath();
+  roofPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+  ctx.closePath();
+  ctx.strokeStyle = '#FBBF24'; // amber-400
+  ctx.lineWidth   = 2;
+  ctx.stroke();
 
-    roofPts.forEach(pt => {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#FFD700';
-      ctx.fill();
-    });
-  }
+  roofPts.forEach(pt => {
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#FBBF24';
+    ctx.fill();
+  });
 
-  // ── 방위 레이블 ──────────────────────────────────────────────────────
-  ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
+  // ── 방위 레이블 ──────────────────────────────────────────────────────────
+  ctx.font      = 'bold 11px "Noto Sans KR", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.fillText('↑ 북', CW / 2, 20);
   ctx.fillText('↓ 남', CW / 2, CH - 8);
 
-  // ── 나침반 (우상단) ──────────────────────────────────────────────────
+  // ── 나침반 ───────────────────────────────────────────────────────────────
   const ncx = CW - 30, ncy = 30, nr = 14;
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.beginPath(); ctx.arc(ncx, ncy, nr, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+  // 북 (파랑)
   ctx.fillStyle = '#60a5fa';
   ctx.beginPath();
   ctx.moveTo(ncx, ncy - nr + 2); ctx.lineTo(ncx + 3.5, ncy + 1);
   ctx.lineTo(ncx, ncy - 1);      ctx.lineTo(ncx - 3.5, ncy + 1);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#374151';
+  // 남 (회색)
+  ctx.fillStyle = '#4b5563';
   ctx.beginPath();
   ctx.moveTo(ncx, ncy + nr - 2); ctx.lineTo(ncx + 3.5, ncy - 1);
   ctx.lineTo(ncx, ncy + 1);      ctx.lineTo(ncx - 3.5, ncy - 1);
   ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#93c5fd';
-  ctx.font = 'bold 7px sans-serif';
+  ctx.font      = 'bold 7px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('N', ncx, ncy - nr - 3);
 
-  // ── 방위각 화살표 ────────────────────────────────────────────────────
+  // 방위각 화살표
   const az    = stats?.azimuth_deg ?? 180;
   const azRad = az * Math.PI / 180;
-  const aLen  = 20;
   ctx.strokeStyle = '#f87171';
   ctx.lineWidth   = 1.8;
   ctx.setLineDash([3, 2]);
   ctx.beginPath();
   ctx.moveTo(ncx, ncy);
-  ctx.lineTo(ncx + aLen * Math.sin(azRad), ncy - aLen * Math.cos(azRad));
+  ctx.lineTo(ncx + 20 * Math.sin(azRad), ncy - 20 * Math.cos(azRad));
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // ── 스케일바 (좌하단) ────────────────────────────────────────────────
-  const scaleM  = 5;
-  const scalePx = scaleM * scale;
+  // ── 스케일바 ─────────────────────────────────────────────────────────────
+  // 실제 스케일: mPerDegLng × scale px/m
+  const mPerDegLng   = M_PER_DEG_LAT * Math.cos(((bbox.minLat + bbox.maxLat) / 2) * Math.PI / 180);
+  const contentWm    = Math.max((bbox.maxLng - bbox.minLng) * mPerDegLng, 1e-3);
+  const contentHm    = Math.max((bbox.maxLat - bbox.minLat) * M_PER_DEG_LAT, 1e-3);
+  const scale        = Math.min((CW - PAD * 2) / contentWm, (CH - PAD * 2) / contentHm) * 0.83;
+  const scaleM       = 5;
+  const scalePx      = scaleM * scale;
   const sbX = PAD + 4, sbY = CH - 14;
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
   ctx.lineWidth   = 1.5;
   ctx.beginPath();
-  ctx.moveTo(sbX, sbY);              ctx.lineTo(sbX + scalePx, sbY);
-  ctx.moveTo(sbX, sbY - 4);          ctx.lineTo(sbX, sbY + 4);
+  ctx.moveTo(sbX, sbY);               ctx.lineTo(sbX + scalePx, sbY);
+  ctx.moveTo(sbX, sbY - 4);           ctx.lineTo(sbX, sbY + 4);
   ctx.moveTo(sbX + scalePx, sbY - 4); ctx.lineTo(sbX + scalePx, sbY + 4);
   ctx.stroke();
-  ctx.fillStyle   = 'rgba(255,255,255,0.7)';
-  ctx.font        = '10px sans-serif';
-  ctx.textAlign   = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font      = '10px sans-serif';
+  ctx.textAlign = 'center';
   ctx.fillText(`${scaleM}m`, sbX + scalePx / 2, sbY - 6);
 
-  // ── 통계 오버레이 (우하단) ───────────────────────────────────────────
+  // ── 통계 오버레이 (우하단) ───────────────────────────────────────────────
   const totalKw = (drawnCount * 0.64).toFixed(1);
   const oW = 118, oH = 60;
   const oX = CW - PAD - 4, oY = CH - PAD - 4;
-
   ctx.fillStyle = 'rgba(0,0,0,0.65)';
   if (ctx.roundRect) {
     ctx.beginPath();
@@ -221,30 +249,31 @@ function draw(canvas, layout) {
   } else {
     ctx.fillRect(oX - oW, oY - oH, oW, oH);
   }
-  const omX = oX - oW / 2;
-  ctx.textAlign   = 'center';
-  ctx.fillStyle   = 'white';
-  ctx.font        = 'bold 17px sans-serif';
-  ctx.fillText(`${drawnCount}매`, omX, oY - oH + 26);
-  ctx.fillStyle   = '#93c5fd';
-  ctx.font        = '12px sans-serif';
-  ctx.fillText(`${totalKw} kW`, omX, oY - oH + 46);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'white';
+  ctx.font      = 'bold 17px sans-serif';
+  ctx.fillText(`${drawnCount}매`, oX - oW / 2, oY - oH + 26);
+  ctx.fillStyle = '#93c5fd';
+  ctx.font      = '12px sans-serif';
+  ctx.fillText(`${totalKw} kW`, oX - oW / 2, oY - oH + 46);
 
+  console.log('[PanelLayoutCanvas] 그려진 패널:', drawnCount, '/', totalKw, 'kW');
+  onPanelCountChange?.(drawnCount, parseFloat(totalKw));
   return drawnCount;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ── React 컴포넌트 ───────────────────────────────────────────────────────────
 
-export default function PanelLayoutCanvas({ layout }) {
-  const canvasRef  = useRef(null);
+export default function PanelLayoutCanvas({ layout, onPanelCountChange = null }) {
+  const canvasRef = useRef(null);
   const [drawn, setDrawn] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !layout?.panels?.length) return;
-    const count = draw(canvas, layout);
+    const count = draw(canvas, layout, onPanelCountChange);
     setDrawn(count ?? 0);
-  }, [layout]);
+  }, [layout, onPanelCountChange]);
 
   if (!layout?.panels?.length) return null;
   const { stats } = layout;
@@ -253,19 +282,19 @@ export default function PanelLayoutCanvas({ layout }) {
     <div className="chart-wrapper">
       {/* 범례 + 통계 */}
       <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        flexWrap: 'wrap', gap: 8, marginBottom: 10,
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10,
       }}>
         <div style={{ display: 'flex', gap: 14 }}>
           {[
-            { fill: 'rgba(37,99,235,0.85)',  stroke: '#93c5fd', label: `설치 패널 (${drawn}매)` },
-            { fill: 'transparent',           stroke: '#FFD700', dash: true, label: '지붕 외곽선' },
-          ].map(({ fill, stroke, label, dash }) => (
+            { fill: 'rgba(59,130,246,0.85)', stroke: '#93c5fd', label: `설치 패널 (${drawn}매)` },
+            { fill: 'rgba(239,68,68,0.80)',  stroke: '#fca5a5', label: `음영 구역` },
+            { fill: 'transparent',           stroke: '#FBBF24', label: '지붕 외곽선' },
+          ].map(({ fill, stroke, label }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{
                 width: 20, height: 11, borderRadius: 2,
-                background: fill,
-                border: `2px ${dash ? 'solid' : 'solid'} ${stroke}`,
+                background: fill, border: `2px solid ${stroke}`,
               }} />
               <span style={{ fontSize: 12 }}>{label}</span>
             </div>
@@ -301,8 +330,8 @@ export default function PanelLayoutCanvas({ layout }) {
       />
 
       <div className="notice-box" style={{ marginTop: 10, fontSize: 12 }}>
-        💛 노란 외곽선 = 지붕 폴리곤 (방위각 {stats?.azimuth_deg ?? 180}° 적용)
-        · 격자 순회 + 중심점 PiP로 외곽선 내부 패널만 표시
+        💛 노란 외곽선 = 지붕 폴리곤 (방위각 {stats?.azimuth_deg ?? 180}° 회전 적용)
+        · Turf.js PiP 필터로 외곽선 내부 패널만 표시
         · 실제 배치 {drawn}매 × 0.64kW = {(drawn * 0.64).toFixed(1)} kW
       </div>
     </div>
