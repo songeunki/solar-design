@@ -22,6 +22,8 @@ export default function SingleAnalysis({ onResultChange }) {
   const [markerPos, setMarkerPos]         = useState(null);
   const [buildingPolygon, setBuildingPolygon] = useState(null);
   const [activeTab, setActiveTab]         = useState('location');
+  const [newAddress, setNewAddress]       = useState('');
+  const [currentAddress, setCurrentAddress] = useState('');
 
   const wsRef     = useRef(null);
   const statusRef = useRef(status);
@@ -30,6 +32,8 @@ export default function SingleAnalysis({ onResultChange }) {
   const startAnalysis = useCallback(({ address, azimuth_override = null }) => {
     if (statusRef.current === 'loading') return;
     setShowModal(false);
+    setCurrentAddress(address);
+    setNewAddress('');
 
     if (wsRef.current && wsRef.current.readyState < 2) {
       wsRef.current.onclose = null;
@@ -98,6 +102,8 @@ export default function SingleAnalysis({ onResultChange }) {
     setResult(null);
     setMarkerPos(null);
     setBuildingPolygon(null);
+    setNewAddress('');
+    setCurrentAddress('');
     onResultChange?.(false);
   }, [onResultChange]);
 
@@ -235,13 +241,35 @@ export default function SingleAnalysis({ onResultChange }) {
                 buildingPolygon={buildingPolygon}
                 height={480}
               />
-              {/* 분석 완료 배너 — 지도 하단 */}
-              <div className="alert-box alert-success" style={{ marginTop: 8 }}>
-                ✅ 분석이 완료되었습니다.
-                <button className="btn btn-sm btn-outline" style={{ marginLeft: 'auto', flexShrink: 0 }}
-                  onClick={handleReset}>
-                  <i className="fa-solid fa-rotate"></i> 새 분석
-                </button>
+              {/* 분석 완료 배너 + 주소 입력 — 지도 하단 */}
+              <div style={{ marginTop: 8 }}>
+                <div className="alert-box alert-success">
+                  ✅ 분석이 완료되었습니다.
+                  <button className="btn btn-sm btn-outline" style={{ marginLeft: 'auto', flexShrink: 0 }}
+                    onClick={handleReset}>
+                    <i className="fa-solid fa-rotate"></i> 새 분석
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input
+                    type="text"
+                    className="addr-input-inline"
+                    placeholder={currentAddress || '새 주소를 입력하세요...'}
+                    value={newAddress}
+                    onChange={e => setNewAddress(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newAddress.trim())
+                        startAnalysis({ address: newAddress.trim() });
+                    }}
+                  />
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#1E6FD9', color: 'white', border: 'none', flexShrink: 0, padding: '0 16px', borderRadius: 8 }}
+                    onClick={() => newAddress.trim() && startAnalysis({ address: newAddress.trim() })}
+                  >
+                    <i className="fa-solid fa-magnifying-glass"></i> 분석
+                  </button>
+                </div>
               </div>
             </div>
             <div className="dashboard-tabs">

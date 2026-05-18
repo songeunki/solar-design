@@ -84,14 +84,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 11px 20px;
+  padding: 13px 22px;
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   background: transparent;
   cursor: pointer;
   font-family: 'Noto Sans KR', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   white-space: nowrap;
@@ -117,6 +117,23 @@
   .result-tab-label { display: none; }
   .result-tab-icon { font-size: 18px; }
 }
+
+/* ── 지도 하단 주소 입력창 ── */
+.addr-input-inline {
+  flex: 1;
+  background: #1e2533;
+  border: 1.5px solid #2d3748;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 13px;
+  color: #e2e8f0;
+  font-family: 'Noto Sans KR', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+.addr-input-inline:focus { border-color: #1E6FD9; }
+.addr-input-inline::placeholder { color: #4a5568; }
 
 /* ══════════════════════════════════════
    AI 스트리밍 커서
