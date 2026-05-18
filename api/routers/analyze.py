@@ -34,6 +34,17 @@ async def satellite_map(lat: float, lng: float, level: int = 2):
     raise HTTPException(status_code=404, detail="위성 이미지 캡처 실패")
 
 
+@router.get("/debug/server-ip")
+async def get_server_ip():
+    """Render 서버 발신 IP 확인용 임시 엔드포인트."""
+    import requests as _req, os
+    try:
+        ip = _req.get("https://api.ipify.org", timeout=5).text.strip()
+    except Exception as e:
+        ip = f"error: {e}"
+    return {"server_ip": ip, "LAW_API_KEY_set": bool(os.environ.get("LAW_API_KEY"))}
+
+
 @router.get("/api/ordinance")
 async def get_ordinance(sido: str = "", sigungu: str = ""):
     """시/도 + 시/군/구 기반 지자체 조례 조회 + Gemini 요약."""
