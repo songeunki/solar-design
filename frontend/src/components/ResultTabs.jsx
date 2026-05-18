@@ -902,32 +902,31 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                                 })()}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                                {[
-                                  { label: '자치법규 정보시스템', href: 'https://www.elis.go.kr' },
-                                  { label: '국가법령정보센터 태양광 조례 검색', href: 'https://www.law.go.kr/ordinSc.do?query=태양광' },
-                                  {
-                                    label: `${ordinance.sigungu && /[가-힣]/.test(ordinance.sigungu) ? ordinance.sigungu : (building.address || '').split(' ')[1] || '해당 지역'}청 홈페이지 검색`,
-                                    href: `https://search.naver.com/search.naver?query=${encodeURIComponent(((building.address || '').split(' ')[1] || '') + '청 홈페이지')}`,
-                                  },
-                                ].map((link, i) => (
-                                  <a key={i} href={link.href} target="_blank" rel="noopener noreferrer"
-                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#2b6cb0', textDecoration: 'underline' }}>
-                                    <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }}></i>
-                                    {link.label}
-                                  </a>
-                                ))}
+                                {(() => {
+                                  const sg = ordinance.sigungu && !/^\d+$/.test(ordinance.sigungu)
+                                    ? ordinance.sigungu
+                                    : ((building.address || '').split(' ')[1] || '');
+                                  const links = [
+                                    { label: '자치법규 정보시스템', href: 'https://www.elis.go.kr' },
+                                    { label: '국가법령정보센터 태양광 조례 검색', href: 'https://www.law.go.kr/ordinSc.do?query=태양광' },
+                                  ];
+                                  if (sg && !/^\d+$/.test(sg)) {
+                                    links.push({
+                                      label: `${sg}청 홈페이지 검색`,
+                                      href: `https://search.naver.com/search.naver?query=${encodeURIComponent(sg + '청 홈페이지')}`,
+                                    });
+                                  }
+                                  return links.map((link, i) => (
+                                    <a key={i} href={link.href} target="_blank" rel="noopener noreferrer"
+                                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#2b6cb0', textDecoration: 'underline' }}>
+                                      <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }}></i>
+                                      {link.label}
+                                    </a>
+                                  ));
+                                })()}
                               </div>
                             </>
                           )}
-                          <a href={ordinance.fallback_url || 'https://www.law.go.kr/ordinSc.do?query=태양광'}
-                             target="_blank" rel="noopener noreferrer"
-                             style={{
-                               display: 'inline-flex', alignItems: 'center', gap: 6,
-                               fontSize: 12, color: '#2b6cb0', textDecoration: 'underline',
-                             }}>
-                            <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 11 }}></i>
-                            국가법령정보센터에서 직접 조회
-                          </a>
                         </>
                       ) : (
                         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>조례 조회 정보가 없습니다.</div>
