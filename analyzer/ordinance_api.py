@@ -51,6 +51,7 @@ def fetch_ordinances(sido: str, sigungu: str) -> dict:
 
     return {
         "found":        len(ordinances) > 0,
+        "message":      "" if ordinances else "해당 지역 관련 조례를 찾지 못했습니다.",
         "ordinances":   ordinances[:5],
         "summary":      summary,
         "fallback_url": "https://www.law.go.kr/ordinSc.do?query=태양광",

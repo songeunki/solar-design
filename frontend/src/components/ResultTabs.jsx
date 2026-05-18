@@ -688,30 +688,32 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                         </div>
                       )}
                       {[
-                        { label: 'PNU', value: reg.pnu || '정보 없음' },
-                        { label: '지목',     value: (reg.landCategory  && reg.landCategory  !== '-') ? reg.landCategory  : null },
-                        { label: '이용현황', value: (reg.landUseStatus  && reg.landUseStatus  !== '-') ? reg.landUseStatus  : null },
-                        { label: '지형고저', value: (reg.terrain        && reg.terrain        !== '-') ? reg.terrain        : null },
-                        { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음',
-                          cls: reg.isFarmland ? 'orange' : '' },
-                        { label: '임야 여부', value: reg.isForest ? '임야 (전용허가 필요)' : '해당없음',
-                          cls: reg.isForest ? 'orange' : '' },
+                        { label: 'PNU', value: reg.pnu || '정보 없음', cls: '' },
+                        { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음', cls: reg.isFarmland ? 'orange' : '' },
+                        { label: '임야 여부', value: reg.isForest   ? '임야 (전용허가 필요)' : '해당없음', cls: reg.isForest   ? 'orange' : '' },
                       ].map((row, i) => (
                         <div className="info-row" key={i}>
                           <span className="info-row-label">{row.label}</span>
-                          <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>
-                            {row.value ?? (
-                              <span style={{ color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                정보 없음
-                                <a href="https://map.vworld.kr/map/maps.do" target="_blank" rel="noopener noreferrer"
-                                   style={{ fontSize: 11, color: '#2b6cb0', textDecoration: 'underline' }}>
-                                  직접 조회
-                                </a>
-                              </span>
-                            )}
-                          </span>
+                          <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>{row.value}</span>
                         </div>
                       ))}
+                      {[
+                        { label: '지목',     raw: reg.landCategory },
+                        { label: '이용현황', raw: reg.landUseStatus },
+                        { label: '지형고저', raw: reg.terrain },
+                      ].map((row, i) => {
+                        const empty = !row.raw || row.raw === '-';
+                        return (
+                          <div className="info-row" key={`land${i}`}>
+                            <span className="info-row-label">{row.label}</span>
+                            <span className="info-row-value" style={{ fontSize: 13 }}>
+                              {empty
+                                ? <span style={{ color: '#888' }}>정보 없음&nbsp;<a href="https://map.vworld.kr/map/maps.do" target="_blank" rel="noopener noreferrer" style={{ color: '#2b6cb0' }}>직접 조회</a></span>
+                                : row.raw}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -860,7 +862,9 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                           {ordinance.found ? (
                             <>
                               <div style={{ marginBottom: 10 }}>
-                                {ordinance.ordinances.map((o, i) => (
+                                {(ordinance.ordinances || [])
+                                  .filter(o => o.title && !/^\d+/.test(o.title.trim()))
+                                  .map((o, i) => (
                                   <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 4 }}>
                                     <a href={o.link} target="_blank" rel="noopener noreferrer"
                                        style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
@@ -892,7 +896,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                           ) : (
                             <>
                               <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
-                                해당 지역 관련 조례를 찾지 못했습니다.
+                                {(() => {
+                                  const msg = ordinance.message || '';
+                                  return /^\d+/.test(msg) ? '해당 지역 관련 조례를 찾지 못했습니다.' : (msg || '해당 지역 관련 조례를 찾지 못했습니다.');
+                                })()}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                                 {[
@@ -1169,7 +1176,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                     { label: '리스크 등급',  value: regulation.riskLevel || '-',      cls: regulation.riskLevel === '낮음' ? 'green' : regulation.riskLevel === '높음' ? 'orange' : '' },
                     { label: '용도지역',     value: regulation.zones?.join(', ') || '-' },
                     { label: '입지 가능성',  value: regulation.zoneFeasibility || '-' },
-                    { label: '지목',         value: regulation.landCategory || '-' },
+                    { label: '지목',         value: (regulation.landCategory && regulation.landCategory !== '-') ? regulation.landCategory : '정보 없음' },
                   ].map((row, i) => (
                     <div className="info-row" key={i}>
                       <span className="info-row-label">{row.label}</span>
