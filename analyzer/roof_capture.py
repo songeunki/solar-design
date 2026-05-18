@@ -162,30 +162,25 @@ def _detect_contour(
 
     best = min(candidates, key=dist_to_center)
 
-    # 폴리곤 단순화 (epsilon = 윤곽 둘레의 2%)
+    # ── Step 1: 작은 epsilon으로 approxPolyDP (0.5% → 세밀한 근사) ────────
     peri   = cv2.arcLength(best, True)
-    approx = cv2.approxPolyDP(best, 0.02 * peri, True)
+    approx = cv2.approxPolyDP(best, 0.005 * peri, True)
 
-    # 중복/근접점 제거 (픽셀 거리 3 이하인 연속 점 제거)
-    MIN_PX_DIST = 3.0
+    # ── Step 2: 근접점 중복 제거 (픽셀 거리 3 이하) ───────────────────────
+    MIN_PX = 3.0
     deduped: list = [approx[0]]
     for pt in approx[1:]:
         prev = deduped[-1]
-        dx = float(pt[0][0]) - float(prev[0][0])
-        dy = float(pt[0][1]) - float(prev[0][1])
-        if math.hypot(dx, dy) > MIN_PX_DIST:
+        if math.hypot(float(pt[0][0]) - float(prev[0][0]),
+                      float(pt[0][1]) - float(prev[0][1])) > MIN_PX:
             deduped.append(pt)
-    # 마지막 점과 첫 점이 같으면 제거
+    # 닫힘 점(첫 점과 같은 마지막 점) 제거
     if len(deduped) > 1:
-        dx = float(deduped[-1][0][0]) - float(deduped[0][0][0])
-        dy = float(deduped[-1][0][1]) - float(deduped[0][0][1])
-        if math.hypot(dx, dy) <= MIN_PX_DIST:
+        if math.hypot(float(deduped[-1][0][0]) - float(deduped[0][0][0]),
+                      float(deduped[-1][0][1]) - float(deduped[0][0][1])) <= MIN_PX:
             deduped.pop()
 
-    if len(deduped) < 4:
-        return None
-
-    # 픽셀 → 위경도 변환
+    # ── 픽셀 → 위경도 변환 헬퍼 ─────────────────────────────────────────────
     lat_range = bounds["ne_lat"] - bounds["sw_lat"]
     lng_range = bounds["ne_lng"] - bounds["sw_lng"]
 
@@ -194,17 +189,28 @@ def _detect_contour(
         lng = bounds["sw_lng"] + (px / w) * lng_range
         return {"lat": round(lat, 8), "lng": round(lng, 8)}
 
-    polygon = [px_to_latlng(float(pt[0][0]), float(pt[0][1])) for pt in deduped]
+    # ── Step 3: 꼭짓점이 4개가 아니면 minAreaRect로 직사각형 강제 생성 ─────
+    if len(deduped) == 4:
+        polygon = [px_to_latlng(float(pt[0][0]), float(pt[0][1])) for pt in deduped]
+    else:
+        print(f"[RoofCapture] approxPolyDP {len(approx)}점 → dedup {len(deduped)}점 "
+              f"→ minAreaRect 4점으로 대체")
+        rect  = cv2.minAreaRect(best)       # 최소 외접 직사각형
+        box   = cv2.boxPoints(rect)         # 4점 float32, 시계방향 정렬
+        box   = np.intp(np.round(box))      # int 변환
+        polygon = [px_to_latlng(float(pt[0]), float(pt[1])) for pt in box]
 
-    # 좌표계 중복 검증 (위경도 변환 후 1e-7도 이하 차이나는 점 제거)
+    # ── Step 4: 위경도 중복 검증 후 최종 반환 ────────────────────────────────
     LAT_LNG_TOL = 1e-7
     unique: list[dict] = [polygon[0]]
     for p in polygon[1:]:
-        if any(abs(p["lat"] - u["lat"]) < LAT_LNG_TOL
-               and abs(p["lng"] - u["lng"]) < LAT_LNG_TOL
-               for u in unique):
-            continue
-        unique.append(p)
+        if not any(abs(p["lat"] - u["lat"]) < LAT_LNG_TOL
+                   and abs(p["lng"] - u["lng"]) < LAT_LNG_TOL
+                   for u in unique):
+            unique.append(p)
+
+    print(f"[RoofCapture] 최종 폴리곤 좌표 {len(unique)}개: {unique}")
+
     if len(unique) < 4:
         return None
 
