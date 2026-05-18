@@ -5,7 +5,7 @@ import requests
 from config import GEMINI_API_KEY
 
 LAW_API_KEY = os.environ.get("LAW_API_KEY", "")
-_LAW_URL    = "https://www.law.go.kr/DRF/lawService.do"
+_SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 _KEYWORDS   = ["태양광", "신재생에너지"]
 
 
@@ -17,32 +17,42 @@ def fetch_ordinances(sido: str, sigungu: str) -> dict:
         for kw in _KEYWORDS:
             try:
                 resp = requests.get(
-                    _LAW_URL,
+                    _SEARCH_URL,
                     params={
                         "OC":      LAW_API_KEY,
                         "target":  "ordin",
                         "type":    "JSON",
-                        "query":   f"{sigungu} {kw}",
-                        "display": 3,
+                        "query":   kw,
+                        "display": 20,
                         "page":    1,
                     },
                     timeout=8,
                 )
                 resp.raise_for_status()
                 data  = resp.json()
-                laws  = data.get("OrdinService", {}).get("law", [])
+                laws  = data.get("OrdinSearch", {}).get("law", [])
                 if isinstance(laws, dict):
                     laws = [laws]
                 for law in laws:
-                    title = (law.get("법령명한글", "") or "").strip()
-                    # 숫자만이거나 5자 미만이면 응답코드·건수 등 오류값으로 간주하고 제외
+                    title = (law.get("자치법규명", "") or "").strip()
+                    organ = (law.get("지자체기관명", "") or "").strip()
+                    # 숫자만이거나 5자 미만이면 제외
                     if not title or title.isdigit() or len(title) < 5:
                         continue
+                    # 같은 시/도 또는 시/군/구 조례만 포함
+                    if sido and organ:
+                        sido_match = sido[:2] in organ or organ[:2] in sido
+                        sg_match   = bool(sigungu) and (sigungu in organ or organ in sigungu)
+                        if not sido_match and not sg_match:
+                            continue
+                    mst = law.get("자치법규일련번호", "")
+                    link = f"https://www.law.go.kr/ordinInfoP.do?ordinSeq={mst}" if mst else f"https://www.law.go.kr/ordinSc.do?query={kw}"
                     if not any(o["title"] == title for o in ordinances):
                         ordinances.append({
                             "title": title,
+                            "organ": organ,
                             "date":  law.get("공포일자", ""),
-                            "link":  f"https://www.law.go.kr/ordinSc.do?query={kw}",
+                            "link":  link,
                         })
             except Exception:
                 pass
