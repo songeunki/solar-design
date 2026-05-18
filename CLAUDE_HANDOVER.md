@@ -75,6 +75,47 @@ cd frontend && npm run dev
 uvicorn api.main:app --reload --port 8001
 
 ## 다음 작업 예정
-(여기에 다음에 할 작업을 직접 입력하세요)
+
+### 우선순위 높음
+1. **LAW_API_KEY 등록 후 조례 조회 검증**
+   - Render 대시보드에서 LAW_API_KEY 등록
+   - 실제 조례 데이터 조회 및 Gemini 요약 동작 확인
+   - ordinance_api.py: 법령명한글 파싱 정확도 점검
+
+2. **V-World 토지특성 API 안정화**
+   - data_collector/regulation_api.py 재시도 로직 강화
+   - VWORLD_LAND_API_KEY 미설정 환경에서 fallback 메시지 개선
+   - 지목/이용현황/지형고저 실제 데이터 수신 확인
+
+3. **주소 파싱 정확도 개선**
+   - sido/sigungu 추출 로직 개선 (현재 단순 split 방식)
+   - "경기도 수원시 장안구" 같은 3단계 행정구역 처리
+   - data_collector/address_api.py: _parse_sido_sigungu 함수 개선
+
+### 우선순위 보통
+4. **규제 탭 용도지역 실데이터 연동**
+   - 현재 건물 용도 기반 추정값 사용 중
+   - V-World 용도지역 API 연동으로 실제 용도지역 표시
+   - regulation_api.py: _fetch_vworld 함수에 용도지역 파싱 추가
+
+5. **비교 분석 탭 기능 완성**
+   - 현재 기본 UI만 구성된 상태
+   - 2~4개 주소 동시 분석 후 수익/용량 비교 테이블
+   - CompareAnalysis.jsx 결과 표시 섹션 추가
+
+6. **보고서 PDF 품질 개선**
+   - output/report_generator.py 레이아웃 개선
+   - 규제 정보(개발행위허가, 전력계통) 보고서에 포함
+   - 위성지도 이미지 캡처 안정화
+
+### 우선순위 낮음
+7. **UI/UX 개선**
+   - 분석 중 단계별 진행 메시지 상세화
+   - 모바일 반응형 레이아웃 점검
+   - 다크모드 색상 일관성 정리
+
+8. **성능 최적화**
+   - Render 무료 플랜 Cold Start 대응 (첫 요청 지연 안내)
+   - 분석 결과 캐싱 (동일 주소 재분석 시 빠른 응답)
 
 ---
