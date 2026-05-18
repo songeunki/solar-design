@@ -3,5 +3,8 @@
   "outputDirectory": "frontend/dist",
   "framework": null,
   "installCommand": "echo skip",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)",     "destination": "/index.html" }
+  ]
 }

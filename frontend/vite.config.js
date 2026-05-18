@@ -11,7 +11,8 @@ export default defineConfig({
       '/files':   { target: 'http://localhost:8001',                   changeOrigin: true },
       '/analyze': { target: 'http://localhost:8001',                   changeOrigin: true },
       '/compare': { target: 'http://localhost:8001',                   changeOrigin: true },
-      '/health':  { target: 'http://localhost:8001',                   changeOrigin: true },
+      '/health':       { target: 'http://localhost:8001', changeOrigin: true },
+      '/api/ordinance': { target: 'http://localhost:8001', changeOrigin: true },
     },
   },
 })

@@ -286,7 +286,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     if (!sido) return;
     ordinanceFetched.current = true;
     setOrdinanceLoading(true);
-    fetch(`${HTTP_BASE}/api/ordinance?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}`)
+    fetch(`/api/ordinance?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}`)
       .then(r => r.json())
       .then(data => { setOrdinance(data); })
       .catch(() => { setOrdinance({ found: false, ordinances: [], summary: null }); })

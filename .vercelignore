@@ -2,6 +2,10 @@ requirements.txt
 Dockerfile
 render.yaml
 Procfile
-api/
+api/main.py
+api/__init__.py
+api/pipeline.py
+api/routers/
 analyzer/
 output/
+data_collector/
