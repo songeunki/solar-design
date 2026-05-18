@@ -29,7 +29,7 @@ export default function KakaoMap({
   const overlayRef  = useRef(null);
   const polygonRef  = useRef(null);          // 건물 윤곽 폴리곤
   const panelRefsRef = useRef([]);           // 패널 Polygon 배열
-  const [mapType, setMapType] = useState('roadmap');
+  const [mapType, setMapType] = useState('skyview');
 
   // ── 초기화 ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function KakaoMap({
       const map = new kakao.maps.Map(mapRef.current, {
         center: new kakao.maps.LatLng(center?.lat ?? 37.5665, center?.lng ?? 126.978),
         level: 4,
-        mapTypeId: kakao.maps.MapTypeId.ROADMAP,
+        mapTypeId: kakao.maps.MapTypeId.HYBRID,
       });
       mapObjRef.current = map;
 
@@ -62,7 +62,7 @@ export default function KakaoMap({
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
     map.setMapTypeId(
-      type === 'skyview' ? window.kakao.maps.MapTypeId.SKYVIEW : window.kakao.maps.MapTypeId.ROADMAP
+      type === 'skyview' ? window.kakao.maps.MapTypeId.HYBRID : window.kakao.maps.MapTypeId.ROADMAP
     );
     setMapType(type);
   };
@@ -82,8 +82,8 @@ export default function KakaoMap({
     const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.4 });
     overlay.setMap(map);
     overlayRef.current = overlay;
-    map.panTo(pos);
-    map.setLevel(1);
+    map.setCenter(pos);
+    map.setLevel(2);
   }, [markerPos]);
 
   // ── 중심 이동 ────────────────────────────────────────────────────────────
@@ -157,9 +157,9 @@ export default function KakaoMap({
 
     panelRefsRef.current = newPolygons;
 
-    // 위성뷰로 자동 전환하여 패널이 잘 보이도록
+    // 위성(하이브리드)뷰로 자동 전환하여 패널이 잘 보이도록
     if (mapType !== 'skyview') {
-      map.setMapTypeId(kakao.maps.MapTypeId.SKYVIEW);
+      map.setMapTypeId(kakao.maps.MapTypeId.HYBRID);
       setMapType('skyview');
     }
   }, [panelLayout]);

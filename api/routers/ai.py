@@ -13,7 +13,7 @@ router = APIRouter(tags=["ai"])
 
 _GEMINI_STREAM_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-1.5-flash:streamGenerateContent?alt=sse&key={key}"
+    "gemini-2.0-flash:streamGenerateContent?alt=sse&key={key}"
 )
 
 # 429 방지: 호출 간 최소 간격
