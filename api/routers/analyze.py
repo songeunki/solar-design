@@ -36,13 +36,27 @@ async def satellite_map(lat: float, lng: float, level: int = 2):
 
 @router.get("/debug/server-ip")
 async def get_server_ip():
-    """Render 서버 발신 IP 확인용 임시 엔드포인트."""
+    """Render 서버 발신 IP + law.go.kr 직접 호출 결과 확인."""
     import requests as _req, os
     try:
         ip = _req.get("https://api.ipify.org", timeout=5).text.strip()
     except Exception as e:
         ip = f"error: {e}"
-    return {"server_ip": ip, "LAW_API_KEY_set": bool(os.environ.get("LAW_API_KEY"))}
+
+    law_key = os.environ.get("LAW_API_KEY", "")
+    law_result = {}
+    if law_key:
+        try:
+            resp = _req.get(
+                "https://www.law.go.kr/DRF/lawSearch.do",
+                params={"OC": law_key, "target": "ordin", "type": "JSON", "display": 2, "query": "태양광"},
+                timeout=8,
+            )
+            law_result = {"status": resp.status_code, "ct": resp.headers.get("content-type",""), "body": resp.text[:300]}
+        except Exception as e:
+            law_result = {"error": str(e)}
+
+    return {"server_ip": ip, "LAW_API_KEY": law_key[:10] + "...", "law_api": law_result}
 
 
 @router.get("/api/ordinance")
