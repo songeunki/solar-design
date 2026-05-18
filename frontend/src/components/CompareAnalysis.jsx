@@ -4,8 +4,7 @@ import ProgressBar from './ProgressBar';
 import KakaoMap from './KakaoMap';
 import MonthlyChart from './MonthlyChart';
 import DownloadButtons from './DownloadButtons';
-
-const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+import { WS_BASE } from '../lib/api';
 
 export default function CompareAnalysis() {
   const [addresses, setAddresses] = useState(['', '']);

@@ -3,6 +3,7 @@ import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
+import { HTTP_BASE } from '../lib/api';
 
 export const TABS = [
   { id: 'location',   icon: 'fa-solid fa-location-dot',    label: '입지' },
@@ -278,7 +279,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     setAiText('');
     setAiRetry(null);
     try {
-      const res = await fetch('/api/ai-evaluate', {
+      const res = await fetch(`${HTTP_BASE}/api/ai-evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -945,7 +946,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
               <div style={{ padding: '16px 24px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
                 {report_url && (
                   <a
-                    href={report_url}
+                    href={`${HTTP_BASE}${report_url}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-primary"
@@ -956,7 +957,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                 )}
                 {pdf_url && (
                   <a
-                    href={pdf_url}
+                    href={`${HTTP_BASE}${pdf_url}`}
                     download
                     className="btn btn-outline"
                     style={{ textDecoration: 'none', borderColor: 'var(--orange)', color: 'var(--orange)' }}

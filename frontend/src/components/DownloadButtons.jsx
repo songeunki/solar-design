@@ -1,3 +1,5 @@
+import { HTTP_BASE } from '../lib/api';
+
 /**
  * DownloadButtons
  * props:
@@ -5,6 +7,8 @@
  *   pdfUrl    - PDF URL → 파일 다운로드 전용
  */
 export default function DownloadButtons({ reportUrl, pdfUrl }) {
+  const resolvedReport = reportUrl ? `${HTTP_BASE}${reportUrl}` : null;
+  const resolvedPdf    = pdfUrl    ? `${HTTP_BASE}${pdfUrl}`    : null;
   if (!reportUrl && !pdfUrl) return null;
 
   return (
@@ -31,9 +35,9 @@ export default function DownloadButtons({ reportUrl, pdfUrl }) {
       <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
 
         {/* HTML — 새 탭에서 바로 보기 (다운로드 아님) */}
-        {reportUrl && (
+        {resolvedReport && (
           <a
-            href={reportUrl}
+            href={resolvedReport}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -67,9 +71,9 @@ export default function DownloadButtons({ reportUrl, pdfUrl }) {
         )}
 
         {/* PDF — 파일 다운로드 */}
-        {pdfUrl && (
+        {resolvedPdf && (
           <a
-            href={pdfUrl}
+            href={resolvedPdf}
             download
             style={{
               display: 'inline-flex',

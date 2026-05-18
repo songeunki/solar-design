@@ -3,8 +3,7 @@ import AddressInput from './AddressInput';
 import ProgressBar from './ProgressBar';
 import ResultTabs, { TABS } from './ResultTabs';
 import KakaoMap from './KakaoMap';
-
-const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+import { WS_BASE } from '../lib/api';
 
 export default function SingleAnalysis({ onResultChange }) {
   const [headerH, setHeaderH] = useState(100);

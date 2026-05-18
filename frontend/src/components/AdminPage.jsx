@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { HTTP_BASE } from '../lib/api';
 
 const FIELDS = [
   {
@@ -68,7 +69,7 @@ export default function AdminPage() {
     setPwError('');
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/config?password=${encodeURIComponent(pw)}`);
+      const res = await fetch(`${HTTP_BASE}/api/admin/config?password=${encodeURIComponent(pw)}`);
       if (res.status === 401) { setPwError('비밀번호가 올바르지 않습니다.'); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -87,7 +88,7 @@ export default function AdminPage() {
   const handleSave = async () => {
     setStatus('saving');
     try {
-      const res = await fetch('/api/admin/config', {
+      const res = await fetch(`${HTTP_BASE}/api/admin/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formToApi(form, pw)),
