@@ -243,8 +243,9 @@ function SectionHeader({ title, badge, right }) {
 export default function ResultTabs({ result, markerPos, buildingPolygon, onMapClick, onReset }) {
   const [activeTab, setActiveTab]   = useState('location');
   const [layoutTab, setLayoutTab]   = useState('2d');
-  const [aiState,   setAiState]     = useState('idle');   // idle|loading|done|error
+  const [aiState,   setAiState]     = useState('idle');   // idle|loading|retrying|streaming|done|error
   const [aiText,    setAiText]      = useState('');
+  const [aiRetry,   setAiRetry]     = useState(null);    // {attempt, total, delay}
 
   if (!result) return null;
 
@@ -272,10 +273,11 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     { icon: '🏆', label: '20년 순수익',    value: fmt만(financial.netProfit20y),  unit: '', color: 'green'  },
   ];
 
-  // ── AI 평가 생성 (Claude API SSE 스트리밍) ──────────────────────────────────
+  // ── AI 평가 생성 (Gemini SSE 스트리밍, 429 재시도 포함) ─────────────────────
   const generateAi = async () => {
     setAiState('loading');
     setAiText('');
+    setAiRetry(null);
     try {
       const res = await fetch('/api/ai-evaluate', {
         method: 'POST',
@@ -296,7 +298,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
-      setAiState('streaming');
       let buf = '';
 
       while (true) {
@@ -312,15 +313,29 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') { setAiState('done'); return; }
           try {
-            const { text, error } = JSON.parse(payload);
-            if (error) throw new Error(error);
-            if (text) setAiText(prev => prev + text);
+            const parsed = JSON.parse(payload);
+
+            if (parsed.error) {
+              setAiText(parsed.error);
+              setAiState('error');
+              return;
+            }
+            if (parsed.retrying) {
+              setAiRetry(JSON.parse(parsed.retrying));
+              setAiState('retrying');
+              continue;
+            }
+            if (parsed.text) {
+              setAiRetry(null);
+              setAiState('streaming');
+              setAiText(prev => prev + parsed.text);
+            }
           } catch { /* JSON 파싱 실패 무시 */ }
         }
       }
       setAiState('done');
     } catch (err) {
-      setAiText(`오류: ${err.message}`);
+      setAiText(err.message || '알 수 없는 오류가 발생했습니다.');
       setAiState('error');
     }
   };
@@ -767,7 +782,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
             <div className="card card-accent">
               <SectionHeader
                 title="🤖 AI 종합 평가"
-                right={<span className="badge badge-blue">Gemini 2.5 Flash</span>}
+                right={<span className="badge badge-blue">Gemini 1.5 Flash</span>}
               />
               <div style={{ padding: '16px 24px 20px' }}>
 
@@ -794,17 +809,30 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   </button>
                 )}
 
-                {/* 연결 중 */}
-                {aiState === 'loading' && (
+                {/* 분석 중 */}
+                {(aiState === 'loading' || aiState === 'retrying') && (
                   <div style={{ textAlign: 'center', padding: '44px 0', color: 'var(--text-muted)' }}>
                     <span className="spinner" style={{ width: 28, height: 28, display: 'inline-block', marginBottom: 14 }} />
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>AI가 분석 중입니다…</div>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>입지·재무·설계 데이터를 종합 평가합니다</div>
+                    {aiState === 'retrying' && aiRetry ? (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#b45309' }}>
+                          AI 분석 중 일시적 오류가 발생했습니다. 잠시 후 자동으로 재시도합니다.
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                          재시도 중 ({aiRetry.attempt}/{aiRetry.total})… {aiRetry.delay}초 대기
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>AI가 분석 중입니다…</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>입지·재무·설계 데이터를 종합 평가합니다</div>
+                      </>
+                    )}
                   </div>
                 )}
 
-                {/* 스트리밍 / 완료 / 오류 */}
-                {(aiState === 'streaming' || aiState === 'done' || aiState === 'error') && (
+                {/* 스트리밍 / 완료 */}
+                {(aiState === 'streaming' || aiState === 'done') && (
                   <div>
                     <div style={{
                       background: '#fafbfc', border: '1px solid var(--border)', borderRadius: 10,
@@ -815,13 +843,35 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                         <span className="ai-cursor" />
                       )}
                     </div>
-                    {aiState !== 'streaming' && (
+                    {aiState === 'done' && (
                       <button className="btn btn-outline"
                         style={{ marginTop: 12, fontSize: 12 }}
-                        onClick={() => { setAiState('idle'); setAiText(''); }}>
+                        onClick={() => { setAiState('idle'); setAiText(''); setAiRetry(null); }}>
                         <i className="fa-solid fa-arrows-rotate"></i> 다시 생성
                       </button>
                     )}
+                  </div>
+                )}
+
+                {/* 오류 */}
+                {aiState === 'error' && (
+                  <div>
+                    <div style={{
+                      background: '#fff5f5', border: '1px solid #fed7d7', borderRadius: 10,
+                      padding: '20px 22px', color: '#c53030',
+                    }}>
+                      <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                        AI 분석 중 일시적 오류가 발생했습니다.
+                      </div>
+                      <div style={{ fontSize: 13 }}>
+                        {aiText || '잠시 후 다시 시도해주세요.'}
+                      </div>
+                    </div>
+                    <button className="btn btn-outline"
+                      style={{ marginTop: 12, fontSize: 12 }}
+                      onClick={() => { setAiState('idle'); setAiText(''); setAiRetry(null); }}>
+                      <i className="fa-solid fa-arrows-rotate"></i> 다시 시도
+                    </button>
                   </div>
                 )}
 

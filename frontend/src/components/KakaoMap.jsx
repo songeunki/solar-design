@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 
-/**
- * KakaoMap
- * props:
- *   center          - { lat, lng }
- *   markerPos       - { lat, lng, label }
- *   onMapClick      - (address) => void
- *   height          - 지도 높이
- *   buildingPolygon - [{lat, lng}] 건물 윤곽 (주황)
- *   panelLayout     - panel_layout 객체 → 패널 Polygon 렌더링
- */
+const KAKAO_APP_KEY = '1a26482813f863a4da8896cde91a820e';
+let kakaoSDKPromise = null;
+
+function loadKakaoSDK() {
+  if (kakaoSDKPromise) return kakaoSDKPromise;
+  kakaoSDKPromise = new Promise((resolve, reject) => {
+    if (window.kakao?.maps) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services&autoload=false`;
+    script.onload = () => window.kakao.maps.load(resolve);
+    script.onerror = () => { kakaoSDKPromise = null; reject(new Error('카카오맵 SDK 로드 실패')); };
+    document.head.appendChild(script);
+  });
+  return kakaoSDKPromise;
+}
+
 export default function KakaoMap({
   center,
   markerPos,
@@ -27,8 +33,8 @@ export default function KakaoMap({
 
   // ── 초기화 ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    const initMap = () => {
-      if (!mapRef.current || !window.kakao?.maps) return;
+    loadKakaoSDK().then(() => {
+      if (!mapRef.current) return;
       const { kakao } = window;
       const map = new kakao.maps.Map(mapRef.current, {
         center: new kakao.maps.LatLng(center?.lat ?? 37.5665, center?.lng ?? 126.978),
@@ -48,8 +54,7 @@ export default function KakaoMap({
           });
         });
       }
-    };
-    if (window.kakao?.maps) window.kakao.maps.load(initMap);
+    }).catch((e) => console.error(e));
   }, []);
 
   // ── 지도 타입 전환 ──────────────────────────────────────────────────────

@@ -152,26 +152,31 @@ class RegulationAPI:
         if not VWORLD_LAND_API_KEY:
             result.errors.append("VWORLD_LAND_API_KEY 미설정")
             return
-        import os
-        domain = os.environ.get("VWORLD_DOMAIN", "solar-design-production.up.railway.app")
-        try:
-            resp = requests.get(
-                VWORLD_LAND_URL,
-                params={
-                    "key":        VWORLD_LAND_API_KEY,
-                    "pnu":        pnu,
-                    "domain":     domain,
-                    "format":     "json",
-                    "numOfRows":  1,
-                    "pageNo":     1,
-                },
-                timeout=12,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            result.errors.append(f"V-World 토지특성 조회 실패: {e}")
-            return
+
+        import time as _time
+        params = {
+            "key":       VWORLD_LAND_API_KEY,
+            "pnu":       pnu,
+            "format":    "json",
+            "numOfRows": 1,
+            "pageNo":    1,
+        }
+
+        data = None
+        for attempt in range(2):
+            try:
+                resp = requests.get(VWORLD_LAND_URL, params=params, timeout=12)
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except Exception as e:
+                if attempt == 0:
+                    _time.sleep(2)
+                else:
+                    result.errors.append(
+                        "토지특성 정보를 불러올 수 없습니다. 수동으로 확인이 필요합니다."
+                    )
+                    return
 
         # 응답 구조: landCharacteristics.field[] 또는 response.result.landCharacteristics.field[]
         lc = (
