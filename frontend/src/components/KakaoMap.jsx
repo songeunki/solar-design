@@ -95,7 +95,7 @@ export default function KakaoMap({
         overlay.setMap(map);
         overlayRef.current = overlay;
         map.setCenter(pos);
-        map.setLevel(2);
+        map.setLevel(1);
       }
 
       // panelLayout이 이미 설정된 경우 즉시 렌더링 (useEffect([panelLayout]) 타이밍 이슈 방지)

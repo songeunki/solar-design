@@ -10,6 +10,8 @@ const SHADE_FILL    = 'rgba(220,38,38,0.50)';
 const SHADE_STROKE  = '#b91c1c';
 const PAD           = 36;
 
+const M_PER_DEG_LAT = 111320;
+
 function draw(canvas, layout) {
   const ctx = canvas.getContext('2d');
   const { panels, roof_polygon, panel_w_deg_lng: pw, panel_h_deg_lat: ph, stats } = layout;
@@ -26,13 +28,26 @@ function draw(canvas, layout) {
   }
   const minLat = Math.min(...lats), maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-  const latR = maxLat - minLat || 1e-9;
-  const lngR = maxLng - minLng || 1e-9;
 
-  const toX = lng => PAD + ((lng - minLng) / lngR) * DW;
-  const toY = lat => PAD + ((maxLat - lat) / latR) * DH;
-  const pxW = Math.max(4, (pw / lngR) * DW);
-  const pxH = Math.max(4, (ph / latR) * DH);
+  // 중심 좌표 (등방 스케일 기준점)
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+
+  // 위경도 → 미터 변환 계수 (위도에 따른 경도 왜곡 보정)
+  const mPerDegLng = M_PER_DEG_LAT * Math.cos(centerLat * Math.PI / 180);
+
+  // 콘텐츠 크기(미터) → 캔버스에 꽉 차게 맞추는 단일 스케일
+  const contentWm = (maxLng - minLng) * mPerDegLng || 1e-3;
+  const contentHm = (maxLat - minLat) * M_PER_DEG_LAT || 1e-3;
+  const scale = Math.min(DW / contentWm, DH / contentHm) * 0.92; // 여유 8%
+
+  // 캔버스 중앙 기준 좌표 변환
+  const canvasCX = CW / 2;
+  const canvasCY = CH / 2;
+  const toX = lng => canvasCX + (lng - centerLng) * mPerDegLng * scale;
+  const toY = lat => canvasCY - (lat - centerLat) * M_PER_DEG_LAT * scale; // Y축 반전
+  const pxW = Math.max(3, pw * mPerDegLng * scale);
+  const pxH = Math.max(3, ph * M_PER_DEG_LAT * scale);
 
   // 배경
   ctx.clearRect(0, 0, CW, CH);
