@@ -97,9 +97,22 @@ function draw(canvas, layout, onPanelCountChange) {
   ];
   const turfRoof = turfPolygon([roofCoords]);
 
-  // ── 지붕 폴리곤 Canvas px 좌표 ───────────────────────────────────────────
-  const roofPts = roof_polygon_eff.map(p => toC(p.lng, p.lat));
-  console.log('[PanelLayoutCanvas] roofPts px (점수:', roofPts.length, '):', JSON.stringify(roofPts));
+  // ── 지붕 폴리곤 Canvas px 좌표 (raw) ────────────────────────────────────
+  const roofPtsRaw = roof_polygon_eff.map(p => toC(p.lng, p.lat));
+
+  // ── 중앙 정렬 offset 계산 ─────────────────────────────────────────────────
+  // 변환된 폴리곤 무게중심 → Canvas 정중앙으로 이동
+  const avgX    = roofPtsRaw.reduce((s, p) => s + p.x, 0) / roofPtsRaw.length;
+  const avgY    = roofPtsRaw.reduce((s, p) => s + p.y, 0) / roofPtsRaw.length;
+  const offsetX = CW / 2 - avgX;
+  const offsetY = CH / 2 - avgY;
+  const shift       = pt => ({ x: pt.x + offsetX, y: pt.y + offsetY });
+  const toCShifted  = (lng, lat) => shift(toC(lng, lat));
+
+  // offset 적용된 최종 폴리곤 좌표
+  const roofPts = roofPtsRaw.map(shift);
+  console.log('[PanelLayoutCanvas] offset (px):', offsetX.toFixed(1), offsetY.toFixed(1));
+  console.log('[PanelLayoutCanvas] roofPts (중앙정렬 후):', JSON.stringify(roofPts));
 
   // ════════════════════════════════════════════════════════════════════════
   // 렌더링
@@ -144,8 +157,8 @@ function draw(canvas, layout, onPanelCountChange) {
     ctx.lineWidth   = 0.6;
 
     if (p.corners?.length === 4) {
-      // corners 사용: 방위각 회전이 이미 반영된 4점 폴리곤
-      const cPts = p.corners.map(c => toC(c.lng, c.lat));
+      // corners 사용: 방위각 회전 + 중앙 offset 적용
+      const cPts = p.corners.map(c => toCShifted(c.lng, c.lat));
       ctx.beginPath();
       cPts.forEach((cpt, i) => i === 0 ? ctx.moveTo(cpt.x, cpt.y) : ctx.lineTo(cpt.x, cpt.y));
       ctx.closePath();
@@ -164,9 +177,9 @@ function draw(canvas, layout, onPanelCountChange) {
       ctx.lineTo(mBot.x, mBot.y);
       ctx.stroke();
     } else {
-      // corners 없을 때: fillRect 폴백
-      const tl = toC(p.lng,      p.lat + ph);
-      const br = toC(p.lng + pw, p.lat);
+      // corners 없을 때: fillRect + 중앙 offset 폴백
+      const tl = toCShifted(p.lng,      p.lat + ph);
+      const br = toCShifted(p.lng + pw, p.lat);
       ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
       ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
     }
