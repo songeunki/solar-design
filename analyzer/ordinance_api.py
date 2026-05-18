@@ -34,8 +34,11 @@ def fetch_ordinances(sido: str, sigungu: str) -> dict:
                 if isinstance(laws, dict):
                     laws = [laws]
                 for law in laws:
-                    title = law.get("법령명한글", "")
-                    if title and not any(o["title"] == title for o in ordinances):
+                    title = (law.get("법령명한글", "") or "").strip()
+                    # 숫자만이거나 5자 미만이면 응답코드·건수 등 오류값으로 간주하고 제외
+                    if not title or title.isdigit() or len(title) < 5:
+                        continue
+                    if not any(o["title"] == title for o in ordinances):
                         ordinances.append({
                             "title": title,
                             "date":  law.get("공포일자", ""),

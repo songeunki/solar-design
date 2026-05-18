@@ -689,9 +689,9 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                       )}
                       {[
                         { label: 'PNU', value: reg.pnu || '정보 없음' },
-                        { label: '지목',     value: reg.landCategory  || null },
-                        { label: '이용현황', value: reg.landUseStatus  || null },
-                        { label: '지형고저', value: reg.terrain        || null },
+                        { label: '지목',     value: (reg.landCategory  && reg.landCategory  !== '-') ? reg.landCategory  : null },
+                        { label: '이용현황', value: (reg.landUseStatus  && reg.landUseStatus  !== '-') ? reg.landUseStatus  : null },
+                        { label: '지형고저', value: (reg.terrain        && reg.terrain        !== '-') ? reg.terrain        : null },
                         { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음',
                           cls: reg.isFarmland ? 'orange' : '' },
                         { label: '임야 여부', value: reg.isForest ? '임야 (전용허가 필요)' : '해당없음',
@@ -702,10 +702,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                           <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>
                             {row.value ?? (
                               <span style={{ color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                API 조회 필요
+                                정보 없음
                                 <a href="https://map.vworld.kr/map/maps.do" target="_blank" rel="noopener noreferrer"
                                    style={{ fontSize: 11, color: '#2b6cb0', textDecoration: 'underline' }}>
-                                  V-World 확인
+                                  직접 조회
                                 </a>
                               </span>
                             )}
