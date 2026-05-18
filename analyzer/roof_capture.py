@@ -18,12 +18,14 @@ def detect_building_polygon(
     lat: float,
     lng: float,
     kakao_js_key: str,
-) -> list[dict] | None:
+) -> tuple[list[dict], float] | None:
     """
     위성지도를 캡처해 건물 외곽선 폴리곤 추출.
 
     Returns:
-        [{lat, lng}] 폴리곤 리스트 또는 None (검출 실패)
+        (polygon, angle_deg) 또는 None (검출 실패)
+        polygon   : [{lat, lng}, ...] 4점 리스트
+        angle_deg : minAreaRect 회전 각도 (-45 ~ 45°, 0=수평)
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -94,12 +96,12 @@ kakao.maps.load(function(){{
 
     # ── OpenCV 건물 외곽 검출 ─────────────────────────────────────────────
     try:
-        polygon = _detect_contour(img_bytes, bounds, w, h)
+        result = _detect_contour(img_bytes, bounds, w, h)
     except Exception as e:
         warnings.warn(f"[RoofCapture] OpenCV 처리 실패: {e}", stacklevel=2)
         return None
 
-    return polygon
+    return result  # (polygon, angle) or None
 
 
 def _detect_contour(
@@ -107,7 +109,7 @@ def _detect_contour(
     bounds: dict,
     w: int,
     h: int,
-) -> list[dict] | None:
+) -> tuple[list[dict], float] | None:
     """
     이미지에서 중심 건물 윤곽 검출.
 
@@ -162,6 +164,12 @@ def _detect_contour(
 
     best = min(candidates, key=dist_to_center)
 
+    # ── minAreaRect: 각도 추출 (항상 수행) ───────────────────────────────────
+    rect      = cv2.minAreaRect(best)
+    raw_angle = rect[2]                              # OpenCV: -90 ~ 0
+    # 0~45 범위로 정규화 (장축 기준)
+    angle_deg = float(90 + raw_angle if raw_angle < -45 else raw_angle)
+
     # ── Step 1: 작은 epsilon으로 approxPolyDP (0.5% → 세밀한 근사) ────────
     peri   = cv2.arcLength(best, True)
     approx = cv2.approxPolyDP(best, 0.005 * peri, True)
@@ -189,15 +197,14 @@ def _detect_contour(
         lng = bounds["sw_lng"] + (px / w) * lng_range
         return {"lat": round(lat, 8), "lng": round(lng, 8)}
 
-    # ── Step 3: 꼭짓점이 4개가 아니면 minAreaRect로 직사각형 강제 생성 ─────
+    # ── Step 3: 꼭짓점이 4개가 아니면 minAreaRect 박스 사용 ────────────────
     if len(deduped) == 4:
         polygon = [px_to_latlng(float(pt[0][0]), float(pt[0][1])) for pt in deduped]
     else:
         print(f"[RoofCapture] approxPolyDP {len(approx)}점 → dedup {len(deduped)}점 "
-              f"→ minAreaRect 4점으로 대체")
-        rect  = cv2.minAreaRect(best)       # 최소 외접 직사각형
-        box   = cv2.boxPoints(rect)         # 4점 float32, 시계방향 정렬
-        box   = np.intp(np.round(box))      # int 변환
+              f"→ minAreaRect 4점으로 대체 (각도 {angle_deg:.1f}°)")
+        box  = cv2.boxPoints(rect)        # 4점 float32, 시계방향 정렬
+        box  = np.intp(np.round(box))     # int 변환
         polygon = [px_to_latlng(float(pt[0]), float(pt[1])) for pt in box]
 
     # ── Step 4: 위경도 중복 검증 후 최종 반환 ────────────────────────────────
@@ -209,9 +216,9 @@ def _detect_contour(
                    for u in unique):
             unique.append(p)
 
-    print(f"[RoofCapture] 최종 폴리곤 좌표 {len(unique)}개: {unique}")
+    print(f"[RoofCapture] 최종 폴리곤 {len(unique)}점, 각도 {angle_deg:.1f}°: {unique}")
 
     if len(unique) < 4:
         return None
 
-    return unique
+    return unique, angle_deg

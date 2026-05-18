@@ -134,7 +134,19 @@ function draw(canvas, layout, onPanelCountChange) {
   ctx.fill();
 
   // ── 패널 렌더링 ─────────────────────────────────────────────────────────
+  // roof_detected_angle: minAreaRect 실측 각도 (없으면 0)
+  const roofAngle    = layout?.stats?.roof_detected_angle ?? 0;
+  const roofAngleRad = (roofAngle * Math.PI) / 180;
+  console.log('[PanelLayoutCanvas] roof_detected_angle:', roofAngle, '°→', roofAngleRad.toFixed(3), 'rad');
+
   ctx.save();
+
+  // 지붕 각도에 맞게 캔버스 회전 (Canvas 중앙 기준)
+  if (roofAngle !== 0) {
+    ctx.translate(CW / 2, CH / 2);
+    ctx.rotate(roofAngleRad);
+    ctx.translate(-CW / 2, -CH / 2);
+  }
 
   // Canvas clip: 폴리곤 외부 픽셀 물리적 차단
   ctx.beginPath();
@@ -187,7 +199,7 @@ function draw(canvas, layout, onPanelCountChange) {
     drawnCount++;
   });
 
-  ctx.restore();
+  ctx.restore(); // 회전 해제 → 지붕 외곽선은 회전 없이 원래 좌표계로 그리기
 
   // ── 지붕 외곽선 (z-order: 패널 위) ──────────────────────────────────────
   ctx.beginPath();

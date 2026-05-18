@@ -78,7 +78,10 @@ def run_pipeline(
     osm_ew_m = building.extra.get("building_ew_m")
     osm_ns_m = building.extra.get("building_ns_m")
 
-    roof_polygon = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
+    _detected       = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
+    roof_polygon    = _detected[0] if _detected else None
+    detected_angle  = _detected[1] if _detected else None
+
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
         lng=location.lng,
@@ -93,6 +96,7 @@ def run_pipeline(
         target_panel_count=electrical.panel_count,
         osm_building_ew_m=osm_ew_m,
         osm_building_ns_m=osm_ns_m,
+        detected_roof_angle=detected_angle,
     )
 
     report = ReportGenerator().generate(
