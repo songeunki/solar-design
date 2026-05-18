@@ -219,6 +219,25 @@ class PanelLayoutEngine:
                 ))
 
         # ── 10. 지붕 윤곽 폴리곤 (회전 포함) ─────────────────────────────
+        # 전달받은 폴리곤이 4개 이상의 유니크 좌표를 갖는지 검증
+        if roof_polygon:
+            _tol = 1e-7
+            _unique = [roof_polygon[0]]
+            for _p in roof_polygon[1:]:
+                if not any(
+                    abs(_p["lat"] - _u["lat"]) < _tol
+                    and abs(_p["lng"] - _u["lng"]) < _tol
+                    for _u in _unique
+                ):
+                    _unique.append(_p)
+            if len(_unique) < 4:
+                import warnings
+                warnings.warn(
+                    f"[PanelLayout] roof_polygon 유니크 점 {len(_unique)}개 < 4 → 직사각형 폴백",
+                    stacklevel=2,
+                )
+                roof_polygon = None   # 폴백 트리거
+
         if not roof_polygon:
             hw = building_ew_m / 2
             hn = building_ns_m / 2

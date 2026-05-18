@@ -56,16 +56,32 @@ function draw(canvas, layout, onPanelCountChange) {
   console.log('[PanelLayoutCanvas] panels 총수:', panels?.length,
     '/ active:', panels?.filter(p => p.status !== 'buffer').length);
 
-  if (!roof_polygon?.length) {
-    console.warn('[PanelLayoutCanvas] roof_polygon 없음 — 렌더링 중단');
-    return 0;
-  }
-
   const CW = canvas.width, CH = canvas.height;
 
-  // ── bbox: roof_polygon 좌표만으로 계산 (핵심 수정) ──────────────────────
-  const rLats = roof_polygon.map(p => p.lat);
-  const rLngs = roof_polygon.map(p => p.lng);
+  // ── roof_polygon 없거나 점이 부족하면 panel 좌표에서 폴백 생성 ──────────
+  let effectivePolygon = roof_polygon;
+  if (!effectivePolygon || effectivePolygon.length < 3) {
+    console.warn('[PanelLayoutCanvas] roof_polygon 부족 — 패널 bounding box 폴백');
+    const allLats = panels.flatMap(p => p.corners?.length
+      ? p.corners.map(c => c.lat)
+      : [p.lat, p.lat + ph]);
+    const allLngs = panels.flatMap(p => p.corners?.length
+      ? p.corners.map(c => c.lng)
+      : [p.lng, p.lng + pw]);
+    const minLat = Math.min(...allLats), maxLat = Math.max(...allLats);
+    const minLng = Math.min(...allLngs), maxLng = Math.max(...allLngs);
+    effectivePolygon = [
+      { lat: minLat, lng: minLng },
+      { lat: minLat, lng: maxLng },
+      { lat: maxLat, lng: maxLng },
+      { lat: maxLat, lng: minLng },
+    ];
+  }
+  const roof_polygon_eff = effectivePolygon;
+
+  // ── bbox: roof_polygon 좌표만으로 계산 (panel corners 제외) ──────────────
+  const rLats = roof_polygon_eff.map(p => p.lat);
+  const rLngs = roof_polygon_eff.map(p => p.lng);
   const bbox = {
     minLat: Math.min(...rLats), maxLat: Math.max(...rLats),
     minLng: Math.min(...rLngs), maxLng: Math.max(...rLngs),
@@ -76,14 +92,14 @@ function draw(canvas, layout, onPanelCountChange) {
 
   // ── Turf.js 폴리곤 생성 (PiP 판별용) ────────────────────────────────────
   const roofCoords = [
-    ...roof_polygon.map(p => [p.lng, p.lat]),
-    [roof_polygon[0].lng, roof_polygon[0].lat], // GeoJSON 닫기
+    ...roof_polygon_eff.map(p => [p.lng, p.lat]),
+    [roof_polygon_eff[0].lng, roof_polygon_eff[0].lat], // GeoJSON 닫기
   ];
   const turfRoof = turfPolygon([roofCoords]);
 
   // ── 지붕 폴리곤 Canvas px 좌표 ───────────────────────────────────────────
-  const roofPts = roof_polygon.map(p => toC(p.lng, p.lat));
-  console.log('[PanelLayoutCanvas] roofPts (px):', JSON.stringify(roofPts));
+  const roofPts = roof_polygon_eff.map(p => toC(p.lng, p.lat));
+  console.log('[PanelLayoutCanvas] roofPts px (점수:', roofPts.length, '):', JSON.stringify(roofPts));
 
   // ════════════════════════════════════════════════════════════════════════
   // 렌더링

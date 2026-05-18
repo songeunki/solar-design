@@ -163,10 +163,26 @@ def _detect_contour(
     best = min(candidates, key=dist_to_center)
 
     # 폴리곤 단순화 (epsilon = 윤곽 둘레의 2%)
-    peri = cv2.arcLength(best, True)
+    peri   = cv2.arcLength(best, True)
     approx = cv2.approxPolyDP(best, 0.02 * peri, True)
 
-    if len(approx) < 4:
+    # 중복/근접점 제거 (픽셀 거리 3 이하인 연속 점 제거)
+    MIN_PX_DIST = 3.0
+    deduped: list = [approx[0]]
+    for pt in approx[1:]:
+        prev = deduped[-1]
+        dx = float(pt[0][0]) - float(prev[0][0])
+        dy = float(pt[0][1]) - float(prev[0][1])
+        if math.hypot(dx, dy) > MIN_PX_DIST:
+            deduped.append(pt)
+    # 마지막 점과 첫 점이 같으면 제거
+    if len(deduped) > 1:
+        dx = float(deduped[-1][0][0]) - float(deduped[0][0][0])
+        dy = float(deduped[-1][0][1]) - float(deduped[0][0][1])
+        if math.hypot(dx, dy) <= MIN_PX_DIST:
+            deduped.pop()
+
+    if len(deduped) < 4:
         return None
 
     # 픽셀 → 위경도 변환
@@ -178,5 +194,18 @@ def _detect_contour(
         lng = bounds["sw_lng"] + (px / w) * lng_range
         return {"lat": round(lat, 8), "lng": round(lng, 8)}
 
-    polygon = [px_to_latlng(float(pt[0][0]), float(pt[0][1])) for pt in approx]
-    return polygon
+    polygon = [px_to_latlng(float(pt[0][0]), float(pt[0][1])) for pt in deduped]
+
+    # 좌표계 중복 검증 (위경도 변환 후 1e-7도 이하 차이나는 점 제거)
+    LAT_LNG_TOL = 1e-7
+    unique: list[dict] = [polygon[0]]
+    for p in polygon[1:]:
+        if any(abs(p["lat"] - u["lat"]) < LAT_LNG_TOL
+               and abs(p["lng"] - u["lng"]) < LAT_LNG_TOL
+               for u in unique):
+            continue
+        unique.append(p)
+    if len(unique) < 4:
+        return None
+
+    return unique
