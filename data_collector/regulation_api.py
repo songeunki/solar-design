@@ -174,7 +174,7 @@ class RegulationAPI:
                     _time.sleep(2)
                 else:
                     result.errors.append(
-                        "토지특성 정보를 불러올 수 없습니다. 수동으로 확인이 필요합니다."
+                        f"토지특성 API 일시 오류 — PNU: {pnu} 로 수동 확인 가능"
                     )
                     return
 

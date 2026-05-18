@@ -667,20 +667,48 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   <div className="card card-accent">
                     <SectionHeader title="🌱 토지 특성" />
                     <div style={{ padding: '0 24px 16px' }}>
+                      {/* 토지특성 API 오류 알림 */}
+                      {reg.errors.some(e => e.includes('토지특성 API') || e.includes('토지특성 정보')) && (
+                        <div style={{
+                          background: '#fffbeb', border: '1px solid #fde68a',
+                          borderRadius: 8, padding: '10px 14px', margin: '8px 0 12px',
+                          fontSize: 12, color: '#744210',
+                        }}>
+                          ⚠️ {reg.errors.find(e => e.includes('토지특성'))}
+                          {reg.pnu && (
+                            <a
+                              href="https://map.vworld.kr/map/maps.do"
+                              target="_blank" rel="noopener noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8, color: '#2b6cb0', textDecoration: 'underline' }}
+                            >
+                              <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }}></i>
+                              V-World 지도에서 직접 확인
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {[
-                        { label: 'PNU',       value: reg.pnu || '-' },
-                        { label: '지목',       value: reg.landCategory || '-' },
-                        { label: '이용현황',   value: reg.landUseStatus || '-' },
-                        { label: '지형고저',   value: reg.terrain || '-' },
-                        { label: '농지 여부',  value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음',
+                        { label: 'PNU', value: reg.pnu || '정보 없음' },
+                        { label: '지목',     value: reg.landCategory  || null },
+                        { label: '이용현황', value: reg.landUseStatus  || null },
+                        { label: '지형고저', value: reg.terrain        || null },
+                        { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음',
                           cls: reg.isFarmland ? 'orange' : '' },
-                        { label: '임야 여부',  value: reg.isForest ? '임야 (전용허가 필요)' : '해당없음',
+                        { label: '임야 여부', value: reg.isForest ? '임야 (전용허가 필요)' : '해당없음',
                           cls: reg.isForest ? 'orange' : '' },
                       ].map((row, i) => (
                         <div className="info-row" key={i}>
                           <span className="info-row-label">{row.label}</span>
                           <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>
-                            {row.value}
+                            {row.value ?? (
+                              <span style={{ color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                API 조회 필요
+                                <a href="https://map.vworld.kr/map/maps.do" target="_blank" rel="noopener noreferrer"
+                                   style={{ fontSize: 11, color: '#2b6cb0', textDecoration: 'underline' }}>
+                                  V-World 확인
+                                </a>
+                              </span>
+                            )}
                           </span>
                         </div>
                       ))}
@@ -740,31 +768,39 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   </div>
 
                   {/* 농지/산지 규제 */}
-                  {(reg.isFarmland || reg.isForest) && (
-                    <div className="card card-accent">
-                      <SectionHeader title="🌾 농지·산지 규제" />
-                      <div style={{ padding: '0 24px 16px' }}>
-                        {reg.isFarmland && [
-                          '농지전용허가 필요 (농림축산식품부)',
-                          '농업진흥구역 해당 여부 별도 확인 필수',
-                          '농업진흥구역 내 태양광 설치 원칙적 불허',
-                        ].map((item, i) => (
-                          <div key={i} className="info-row">
-                            <span style={{ fontSize: 13, color: '#c05621' }}>• {item}</span>
-                          </div>
-                        ))}
-                        {reg.isForest && [
-                          '산지전용허가 필요 (산림청)',
-                          '보전산지(공익용·임업용) 설치 불허',
-                          '준보전산지는 조건부 허용 가능',
-                        ].map((item, i) => (
-                          <div key={i} className="info-row">
-                            <span style={{ fontSize: 13, color: '#744210' }}>• {item}</span>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="card card-accent">
+                    <SectionHeader title="🌾 농지·산지 규제" />
+                    <div style={{ padding: '0 24px 16px' }}>
+                      {!reg.isFarmland && !reg.isForest ? (
+                        <div className="info-row">
+                          <span style={{ fontSize: 13, color: '#38a169', fontWeight: 600 }}>
+                            ✓ 농지·산지 해당 없음 — 추가 전용허가 불필요
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          {reg.isFarmland && [
+                            '농지전용허가 필요 (농림축산식품부)',
+                            '농업진흥구역 해당 여부 별도 확인 필수',
+                            '농업진흥구역 내 태양광 설치 원칙적 불허',
+                          ].map((item, i) => (
+                            <div key={`f${i}`} className="info-row">
+                              <span style={{ fontSize: 13, color: '#c05621' }}>• {item}</span>
+                            </div>
+                          ))}
+                          {reg.isForest && [
+                            '산지전용허가 필요 (산림청)',
+                            '보전산지(공익용·임업용) 설치 불허',
+                            '준보전산지는 조건부 허용 가능',
+                          ].map((item, i) => (
+                            <div key={`w${i}`} className="info-row">
+                              <span style={{ fontSize: 13, color: '#744210' }}>• {item}</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
-                  )}
+                  </div>
 
                   {/* 전력계통 연계 판단 */}
                   <div className="card card-accent">
@@ -854,9 +890,27 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                               )}
                             </>
                           ) : (
-                            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
-                              {ordinance.sigungu || ''} 관련 조례를 찾지 못했습니다.
-                            </div>
+                            <>
+                              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
+                                해당 지역 관련 조례를 찾지 못했습니다.
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                                {[
+                                  { label: '자치법규 정보시스템', href: 'https://www.elis.go.kr' },
+                                  { label: '국가법령정보센터 태양광 조례 검색', href: 'https://www.law.go.kr/ordinSc.do?query=태양광' },
+                                  {
+                                    label: `${ordinance.sigungu && /[가-힣]/.test(ordinance.sigungu) ? ordinance.sigungu : (building.address || '').split(' ')[1] || '해당 지역'}청 홈페이지 검색`,
+                                    href: `https://search.naver.com/search.naver?query=${encodeURIComponent(((building.address || '').split(' ')[1] || '') + '청 홈페이지')}`,
+                                  },
+                                ].map((link, i) => (
+                                  <a key={i} href={link.href} target="_blank" rel="noopener noreferrer"
+                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#2b6cb0', textDecoration: 'underline' }}>
+                                    <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }}></i>
+                                    {link.label}
+                                  </a>
+                                ))}
+                              </div>
+                            </>
                           )}
                           <a href={ordinance.fallback_url || 'https://www.law.go.kr/ordinSc.do?query=태양광'}
                              target="_blank" rel="noopener noreferrer"
