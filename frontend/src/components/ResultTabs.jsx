@@ -342,11 +342,15 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
   // ── 렌더링 ──────────────────────────────────────────────────────────────────
   return (
     <div>
-      {/* 성공 배너 */}
-      <div className="alert-box alert-success" style={{ marginBottom: 16 }}>
-        ✅ 분석이 완료되었습니다.
-        <button className="btn btn-sm btn-outline" style={{ marginLeft: 'auto', flexShrink: 0 }}
-          onClick={onReset}><i className="fa-solid fa-rotate"></i> 새 분석</button>
+      {/* ── 탭 바 ─────────────────────────────────────────────────────────── */}
+      <div className="result-tab-bar">
+        {TABS.map(tab => (
+          <button key={tab.id} className={`result-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}>
+            <i className={tab.icon}></i>
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── 기존 태양광 감지 배너 ─────────────────────────────────────────── */}

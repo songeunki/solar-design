@@ -235,18 +235,13 @@ export default function SingleAnalysis({ onResultChange }) {
                 buildingPolygon={buildingPolygon}
                 height={480}
               />
-              {/* 탭바 — 지도 하단 */}
-              <div className="result-tab-bar" style={{ marginTop: 8 }}>
-                {TABS.map(tab => (
-                  <button
-                    key={tab.id}
-                    className={`result-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab.id)}
-                  >
-                    <i className={tab.icon}></i>
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
+              {/* 분석 완료 배너 — 지도 하단 */}
+              <div className="alert-box alert-success" style={{ marginTop: 8 }}>
+                ✅ 분석이 완료되었습니다.
+                <button className="btn btn-sm btn-outline" style={{ marginLeft: 'auto', flexShrink: 0 }}
+                  onClick={handleReset}>
+                  <i className="fa-solid fa-rotate"></i> 새 분석
+                </button>
               </div>
             </div>
             <div className="dashboard-tabs">
