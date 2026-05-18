@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
 import BuildingInfo from './BuildingInfo';
@@ -247,6 +247,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
   const [aiText,    setAiText]      = useState('');
   const [aiRetry,   setAiRetry]     = useState(null);    // {attempt, total, delay}
 
+  const [ordinance,        setOrdinance]        = useState(null);
+  const [ordinanceLoading, setOrdinanceLoading] = useState(false);
+  const ordinanceFetched = useRef(false);
+
   if (!result) return null;
 
   const {
@@ -272,6 +276,22 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
     { icon: '📜', label: 'REC 수익(추정)', value: financial.recRevenue ? fmt만(financial.recRevenue) : '-', unit: '', color: 'orange' },
     { icon: '🏆', label: '20년 순수익',    value: fmt만(financial.netProfit20y),  unit: '', color: 'green'  },
   ];
+
+  // ── 지자체 조례 조회 (규제 탭 진입 시 1회) ───────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'regulation' || ordinanceFetched.current) return;
+    const parts = (building.address || '').split(' ');
+    const sido = parts[0] || '';
+    const sigungu = parts[1] || '';
+    if (!sido) return;
+    ordinanceFetched.current = true;
+    setOrdinanceLoading(true);
+    fetch(`${HTTP_BASE}/api/ordinance?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}`)
+      .then(r => r.json())
+      .then(data => { setOrdinance(data); })
+      .catch(() => { setOrdinance({ found: false, ordinances: [], summary: null }); })
+      .finally(() => setOrdinanceLoading(false));
+  }, [activeTab, building.address, HTTP_BASE]);
 
   // ── AI 평가 생성 (Gemini SSE 스트리밍, 429 재시도 포함) ─────────────────────
   const generateAi = async () => {
@@ -664,6 +684,193 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                           </span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* 개발행위허가 검토 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="🏗️ 개발행위허가 검토" />
+                    <div style={{ padding: '0 24px 16px' }}>
+                      {/* 건축물 지붕 */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>
+                          건축허가·신고 대상
+                        </div>
+                        {[
+                          '건축물 지붕 태양광 설치 → 건축허가 또는 신고 대상',
+                          reg.isFarmland ? '농지 설치 → 개발행위허가 필수 (농지법 적용)' : null,
+                          reg.isForest   ? '임야 설치 → 개발행위허가 필수 (산지관리법 적용)' : null,
+                          (!reg.isFarmland && !reg.isForest && reg.zoneFeasibility === '조건부')
+                            ? '용도지역 조건부 허용 → 개발행위허가 필요' : null,
+                        ].filter(Boolean).map((item, i) => (
+                          <div key={i} className="info-row">
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>• {item}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* 용도지역별 건폐율/용적률 */}
+                      {reg.zones.length > 0 && (
+                        <div style={{ marginBottom: 14 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>
+                            용도지역 제한
+                          </div>
+                          <div className="info-row">
+                            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                              {reg.zoneNote || `${reg.zones[0]} 기준 건폐율·용적률 제한 확인 필요`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {/* 경관심의 / 환경영향평가 */}
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>
+                          규모별 추가 검토
+                        </div>
+                        {[
+                          { cond: (system.totalKw ?? 0) >= 100,  label: `경관심의 대상 (100kW 이상 — 현재 ${system.totalKw}kW)`,   color: '#d69e2e' },
+                          { cond: (system.totalKw ?? 0) >= 1000, label: `환경영향평가 대상 (1MW 이상 — 현재 ${system.totalKw}kW)`,  color: '#e53e3e' },
+                          { cond: (system.totalKw ?? 0) < 100,   label: `경관심의 불필요 (100kW 미만 — 현재 ${system.totalKw}kW)`,  color: '#38a169' },
+                        ].filter(i => i.cond).map((item, i) => (
+                          <div key={i} className="info-row">
+                            <span style={{ fontSize: 13, color: item.color, fontWeight: 600 }}>• {item.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 농지/산지 규제 */}
+                  {(reg.isFarmland || reg.isForest) && (
+                    <div className="card card-accent">
+                      <SectionHeader title="🌾 농지·산지 규제" />
+                      <div style={{ padding: '0 24px 16px' }}>
+                        {reg.isFarmland && [
+                          '농지전용허가 필요 (농림축산식품부)',
+                          '농업진흥구역 해당 여부 별도 확인 필수',
+                          '농업진흥구역 내 태양광 설치 원칙적 불허',
+                        ].map((item, i) => (
+                          <div key={i} className="info-row">
+                            <span style={{ fontSize: 13, color: '#c05621' }}>• {item}</span>
+                          </div>
+                        ))}
+                        {reg.isForest && [
+                          '산지전용허가 필요 (산림청)',
+                          '보전산지(공익용·임업용) 설치 불허',
+                          '준보전산지는 조건부 허용 가능',
+                        ].map((item, i) => (
+                          <div key={i} className="info-row">
+                            <span style={{ fontSize: 13, color: '#744210' }}>• {item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 전력계통 연계 판단 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="🔌 전력계통 연계 판단" />
+                    <div style={{ padding: '0 24px 16px' }}>
+                      {(() => {
+                        const kw = system.totalKw ?? 0;
+                        const isLow  = kw < 100;
+                        const needBiz = kw > 1000;
+                        return (
+                          <>
+                            <div className="info-row">
+                              <span className="info-row-label">연계 방식</span>
+                              <span className="info-row-value" style={{
+                                fontWeight: 700,
+                                color: isLow ? '#2b6cb0' : '#c05621',
+                              }}>
+                                {isLow ? `저압 연계 (100kW 미만 — ${kw}kW)` : `고압 연계 (100kW 이상 — ${kw}kW)`}
+                              </span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-row-label">한전 계통 연계 신청</span>
+                              <span className="info-row-value" style={{ fontSize: 13 }}>필수 (한전 사이버지점 신청)</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-row-label">발전사업허가</span>
+                              <span className="info-row-value" style={{
+                                fontWeight: 700,
+                                color: needBiz ? '#e53e3e' : '#38a169',
+                              }}>
+                                {needBiz
+                                  ? `필요 (1,000kW 초과 — ${kw}kW)`
+                                  : `불필요 (1,000kW 이하 — ${kw}kW)`}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* 지자체 조례 */}
+                  <div className="card card-accent">
+                    <SectionHeader title="📜 지자체 조례 조회" />
+                    <div style={{ padding: '8px 24px 20px' }}>
+                      {ordinanceLoading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
+                          <div style={{
+                            width: 18, height: 18, border: '2px solid var(--border)',
+                            borderTopColor: 'var(--blue)', borderRadius: '50%',
+                            animation: 'spin 0.8s linear infinite', flexShrink: 0,
+                          }} />
+                          조례 정보를 조회 중입니다…
+                        </div>
+                      ) : ordinance ? (
+                        <>
+                          {ordinance.found ? (
+                            <>
+                              <div style={{ marginBottom: 10 }}>
+                                {ordinance.ordinances.map((o, i) => (
+                                  <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 4 }}>
+                                    <a href={o.link} target="_blank" rel="noopener noreferrer"
+                                       style={{ color: '#2b6cb0', textDecoration: 'underline' }}>
+                                      {o.title}
+                                    </a>
+                                    {o.date && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{o.date}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                              {ordinance.summary && (
+                                <div style={{
+                                  background: '#ebf8ff', border: '1px solid #bee3f8',
+                                  borderRadius: 8, padding: '12px 14px', fontSize: 13,
+                                }}>
+                                  <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: 8 }}>AI 요약</div>
+                                  {[
+                                    { label: '제한 사항', value: ordinance.summary.restrictions },
+                                    { label: '지원 내용', value: ordinance.summary.support },
+                                    { label: '허가 절차', value: ordinance.summary.procedure },
+                                  ].map((row, i) => row.value && (
+                                    <div key={i} style={{ marginBottom: 6 }}>
+                                      <span style={{ fontWeight: 600, color: '#2c5282' }}>{row.label}: </span>
+                                      <span style={{ color: '#2d3748' }}>{row.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
+                              {ordinance.sigungu || ''} 관련 조례를 찾지 못했습니다.
+                            </div>
+                          )}
+                          <a href={ordinance.fallback_url || 'https://www.law.go.kr/ordinSc.do?query=태양광'}
+                             target="_blank" rel="noopener noreferrer"
+                             style={{
+                               display: 'inline-flex', alignItems: 'center', gap: 6,
+                               fontSize: 12, color: '#2b6cb0', textDecoration: 'underline',
+                             }}>
+                            <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 11 }}></i>
+                            국가법령정보센터에서 직접 조회
+                          </a>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>조례 조회 정보가 없습니다.</div>
+                      )}
                     </div>
                   </div>
 

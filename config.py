@@ -21,6 +21,7 @@ KAKAO_JS_APP_KEY    = os.environ.get("KAKAO_JS_APP_KEY", "")
 ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")   # 미사용 (Gemini로 교체)
 GEMINI_API_KEY      = os.environ.get("GEMINI_API_KEY", "")
 LURIS_API_KEY       = os.environ.get("LURIS_API_KEY", "")
+LAW_API_KEY         = os.environ.get("LAW_API_KEY", "")
 
 API_KEYS = {
     "address":  VWORLD_API_KEY,

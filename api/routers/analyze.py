@@ -34,6 +34,15 @@ async def satellite_map(lat: float, lng: float, level: int = 2):
     raise HTTPException(status_code=404, detail="위성 이미지 캡처 실패")
 
 
+@router.get("/api/ordinance")
+async def get_ordinance(sido: str = "", sigungu: str = ""):
+    """시/도 + 시/군/구 기반 지자체 조례 조회 + Gemini 요약."""
+    from analyzer.ordinance_api import fetch_ordinances
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, fetch_ordinances, sido, sigungu)
+    return result
+
+
 @router.get("/api/regulation")
 async def get_regulation(address: str, pnu: str = ""):
     """PNU + 주소로 용도지역·토지특성 규제 분석."""

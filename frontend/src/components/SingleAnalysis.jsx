@@ -5,7 +5,7 @@ import ResultTabs, { TABS } from './ResultTabs';
 import KakaoMap from './KakaoMap';
 import { WS_BASE } from '../lib/api';
 
-export default function SingleAnalysis({ onResultChange }) {
+export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
   const [headerH, setHeaderH] = useState(100);
   useEffect(() => {
     const header = document.querySelector('.app-header-dark');
@@ -40,6 +40,7 @@ export default function SingleAnalysis({ onResultChange }) {
     }
 
     setStatus('loading');
+    onLoadingChange?.(true);
     setStep(0);
     setMessage('연결 중…');
     setResult(null);
@@ -74,37 +75,42 @@ export default function SingleAnalysis({ onResultChange }) {
           setBuildingPolygon(msg.data.panel_layout.roof_polygon);
         }
         setStatus('done');
+        onLoadingChange?.(false);
         setStep(5);
         setMessage('분석 완료!');
         onResultChange?.(true);
       } else if (msg.type === 'error') {
         setErrorMsg(msg.message || '알 수 없는 오류가 발생했습니다.');
         setStatus('error');
+        onLoadingChange?.(false);
       }
     };
 
     ws.onerror = () => {
       setErrorMsg('서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.');
       setStatus('error');
+      onLoadingChange?.(false);
     };
 
     ws.onclose = () => {
       if (statusRef.current === 'loading') {
         setErrorMsg('서버 연결이 끊어졌습니다.');
         setStatus('error');
+        onLoadingChange?.(false);
       }
     };
-  }, [onResultChange]);
+  }, [onResultChange, onLoadingChange]);
 
   const handleReset = useCallback(() => {
     setStatus('idle');
+    onLoadingChange?.(false);
     setResult(null);
     setMarkerPos(null);
     setBuildingPolygon(null);
     setNewAddress('');
     setCurrentAddress('');
     onResultChange?.(false);
-  }, [onResultChange]);
+  }, [onResultChange, onLoadingChange]);
 
   const isDone = status === 'done' && result;
   const { system = {}, financial = {} } = result || {};
