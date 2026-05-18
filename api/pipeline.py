@@ -62,10 +62,8 @@ def run_pipeline(
     p(5, "보고서 생성 및 규제 분석")
     solar_altitude_deg = _calc_solar_altitude(location.lat)
 
-    # 패널 배치 계산 (위성 윤곽 검출 시도 → 실패 시 직사각형 근사)
+    # 패널 배치 계산 (직사각형 근사)
     from analyzer.panel_layout import PanelLayoutEngine
-    from analyzer.roof_capture import detect_building_polygon
-    from config import KAKAO_JS_APP_KEY
 
     roof_shape   = building.extra.get("roof_shape", "flat")
     arch_area_m2 = building.extra.get("arch_area_m2") or building.roof_area_m2
@@ -78,10 +76,6 @@ def run_pipeline(
     osm_ew_m = building.extra.get("building_ew_m")
     osm_ns_m = building.extra.get("building_ns_m")
 
-    _detected       = detect_building_polygon(location.lat, location.lng, KAKAO_JS_APP_KEY)
-    roof_polygon    = _detected[0] if _detected else None
-    detected_angle  = _detected[1] if _detected else None
-
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
         lng=location.lng,
@@ -89,14 +83,12 @@ def run_pipeline(
         tilt_deg=roof.tilt_deg,
         sun_elevation_winter_deg=roof.solar_elevations.get("동지", 29.4),
         annual_generation_kwh=electrical.annual_generation_kwh,
-        roof_polygon=roof_polygon,
         azimuth_deg=effective_azimuth,
         arch_area_m2=arch_area_m2,
         roof_shape=roof_shape,
         target_panel_count=electrical.panel_count,
         osm_building_ew_m=osm_ew_m,
         osm_building_ns_m=osm_ns_m,
-        detected_roof_angle=detected_angle,
     )
 
     report = ReportGenerator().generate(

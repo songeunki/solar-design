@@ -2,39 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 const KAKAO_APP_KEY = '1a26482813f863a4da8896cde91a820e';
 
-const PANEL_COLOR = {
-  active: { stroke: '#1565c0', fill: '#1E6FD9', opacity: 0.5  },
-  shade:  { stroke: '#b91c1c', fill: '#FF6B35', opacity: 0.4  },
-  north:  { stroke: '#003060', fill: '#0d3d8a', opacity: 0.45 },
-};
-
-// 패널 폴리곤을 지도에 그리는 순수 함수 (init effect와 useEffect 양쪽에서 재사용)
-function _renderPanels(map, kakao, panelLayout, panelRefsRef) {
-  panelRefsRef.current.forEach(p => p.setMap(null));
-  panelRefsRef.current = [];
-  if (!panelLayout?.panels?.length) return;
-
-  const { panels, panel_w_deg_lng: pw, panel_h_deg_lat: ph } = panelLayout;
-  const polys = panels.map((p) => {
-    if (p.status === 'buffer') return null;
-    const c = PANEL_COLOR[p.status] || PANEL_COLOR.active;
-    const path = (p.corners?.length === 4)
-      ? p.corners.map(v => new kakao.maps.LatLng(v.lat, v.lng))
-      : [
-          new kakao.maps.LatLng(p.lat,       p.lng),
-          new kakao.maps.LatLng(p.lat,       p.lng + pw),
-          new kakao.maps.LatLng(p.lat + ph,  p.lng + pw),
-          new kakao.maps.LatLng(p.lat + ph,  p.lng),
-        ];
-    const poly = new kakao.maps.Polygon({
-      path, strokeWeight: 1, strokeColor: c.stroke, strokeOpacity: 0.9,
-      fillColor: c.fill, fillOpacity: c.opacity,
-    });
-    poly.setMap(map);
-    return poly;
-  }).filter(Boolean);
-  panelRefsRef.current = polys;
-}
 let kakaoSDKPromise = null;
 
 function loadKakaoSDK() {
@@ -56,17 +23,13 @@ export default function KakaoMap({
   onMapClick,
   height = 340,
   buildingPolygon = null,
-  panelLayout = null,
 }) {
   const mapRef       = useRef(null);
   const mapObjRef    = useRef(null);
   const overlayRef   = useRef(null);
   const polygonRef   = useRef(null);
-  const panelRefsRef = useRef([]);
   const markerPosRef   = useRef(markerPos);
   markerPosRef.current = markerPos;
-  const panelLayoutRef   = useRef(panelLayout);
-  panelLayoutRef.current = panelLayout;
   const [mapType, setMapType] = useState('skyview');
 
   // ── 초기화 ──────────────────────────────────────────────────────────────
@@ -96,14 +59,6 @@ export default function KakaoMap({
         overlayRef.current = overlay;
         map.setCenter(pos);
         map.setLevel(1);
-      }
-
-      // panelLayout이 이미 설정된 경우 즉시 렌더링 (useEffect([panelLayout]) 타이밍 이슈 방지)
-      const pl = panelLayoutRef.current;
-      if (pl?.panels?.length) {
-        _renderPanels(map, kakao, pl, panelRefsRef);
-        map.setMapTypeId(kakao.maps.MapTypeId.HYBRID);
-        setMapType('skyview');
       }
 
       if (onMapClick) {
@@ -172,17 +127,6 @@ export default function KakaoMap({
     poly.setMap(map);
     polygonRef.current = poly;
   }, [buildingPolygon]);
-
-  // ── 패널 Polygon 렌더링 ──────────────────────────────────────────────────
-  useEffect(() => {
-    const map = mapObjRef.current;
-    if (!map || !window.kakao?.maps) return;
-    _renderPanels(map, window.kakao, panelLayout, panelRefsRef);
-    if (panelLayout?.panels?.length && mapType !== 'skyview') {
-      map.setMapTypeId(window.kakao.maps.MapTypeId.HYBRID);
-      setMapType('skyview');
-    }
-  }, [panelLayout]);
 
   // ── 토글 버튼 스타일 ──────────────────────────────────────────────────────
   const btnStyle = (type) => ({

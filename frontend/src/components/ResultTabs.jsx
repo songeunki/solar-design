@@ -1,9 +1,6 @@
 import { useState } from 'react';
-import KakaoMap from './KakaoMap';
 import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
-import PanelLayoutViewer from './PanelLayoutViewer';
-import PanelLayoutCanvas from './PanelLayoutCanvas';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
 
@@ -241,7 +238,6 @@ function SectionHeader({ title, badge, right }) {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export default function ResultTabs({ result, markerPos, buildingPolygon, onMapClick, onReset }) {
   const [activeTab, setActiveTab]   = useState('location');
-  const [layoutTab, setLayoutTab]   = useState('2d');
   const [aiState,   setAiState]     = useState('idle');   // idle|loading|retrying|streaming|done|error
   const [aiText,    setAiText]      = useState('');
   const [aiRetry,   setAiRetry]     = useState(null);    // {attempt, total, delay}
@@ -504,37 +500,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
         {/* ════ 탭 3: 설계 분석 ════ */}
         {activeTab === 'design' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* 2D / 3D 패널 배치도 */}
-            {panel_layout && (
-              <div className="card card-accent">
-                <SectionHeader
-                  title="🔲 태양광 패널 가상 배치도"
-                  right={
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[{ id: '2d', label: '📐 SVG' }, { id: '3d', label: '🎨 Canvas' }].map(({ id, label }) => (
-                        <button key={id} onClick={() => setLayoutTab(id)} style={{
-                          padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                          fontWeight: 600, fontSize: 12, transition: 'all 0.15s',
-                          background: layoutTab === id ? 'var(--blue)' : 'var(--bg)',
-                          color:      layoutTab === id ? 'white' : 'var(--text-secondary)',
-                        }}>{label}</button>
-                      ))}
-                      <div className="badge badge-blue" style={{ marginLeft: 4 }}>
-                        640W × {panel_layout.stats?.active_panels ?? '-'}매
-                      </div>
-                    </div>
-                  }
-                />
-                <div style={{ padding: '0 4px 4px' }}>
-                  {layoutTab === '2d' ? (
-                    <PanelLayoutViewer layout={panel_layout} lat={result.lat} />
-                  ) : (
-                    <PanelLayoutCanvas layout={panel_layout} />
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* 건물 정보 + 배치 상세 */}
             <div className="result-main-grid">
               <BuildingInfo building={building} system={system} />

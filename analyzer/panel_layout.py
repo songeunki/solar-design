@@ -104,7 +104,6 @@ class PanelLayoutEngine:
         target_panel_count: int | None = None,
         osm_building_ew_m: float | None = None,
         osm_building_ns_m: float | None = None,
-        detected_roof_angle: float | None = None,
     ) -> PanelLayoutResult:
 
         m_lng = M_PER_DEG_LAT * math.cos(math.radians(lat))
@@ -274,8 +273,7 @@ class PanelLayoutEngine:
             "roof_shape":       roof_shape,
             "building_ew_m":    round(building_ew_m, 1),
             "building_ns_m":    round(building_ns_m, 1),
-            "capture_radius_m":    CAPTURE_RADIUS_M,
-            "roof_detected_angle": detected_roof_angle,  # minAreaRect 실측 각도 (없으면 None)
+            "capture_radius_m": CAPTURE_RADIUS_M,
         }
 
         return PanelLayoutResult(
