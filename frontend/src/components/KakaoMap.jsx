@@ -24,11 +24,13 @@ export default function KakaoMap({
   buildingPolygon = null,
   panelLayout = null,
 }) {
-  const mapRef      = useRef(null);
-  const mapObjRef   = useRef(null);
-  const overlayRef  = useRef(null);
-  const polygonRef  = useRef(null);          // 건물 윤곽 폴리곤
-  const panelRefsRef = useRef([]);           // 패널 Polygon 배열
+  const mapRef       = useRef(null);
+  const mapObjRef    = useRef(null);
+  const overlayRef   = useRef(null);
+  const polygonRef   = useRef(null);
+  const panelRefsRef = useRef([]);
+  const markerPosRef = useRef(markerPos);   // 항상 최신 markerPos 참조
+  markerPosRef.current = markerPos;
   const [mapType, setMapType] = useState('skyview');
 
   // ── 초기화 ──────────────────────────────────────────────────────────────
@@ -42,6 +44,23 @@ export default function KakaoMap({
         mapTypeId: kakao.maps.MapTypeId.HYBRID,
       });
       mapObjRef.current = map;
+
+      // SDK가 비동기로 초기화되는 동안 markerPos가 이미 설정된 경우
+      // useEffect([markerPos])는 map이 null이라 조기 종료됐으므로 여기서 직접 적용
+      const mp = markerPosRef.current;
+      if (mp) {
+        const pos = new kakao.maps.LatLng(mp.lat, mp.lng);
+        if (overlayRef.current) overlayRef.current.setMap(null);
+        const content = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
+          📍 ${mp.label || '분석 위치'}
+          <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #1E6FD9;"></div>
+        </div>`;
+        const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.4 });
+        overlay.setMap(map);
+        overlayRef.current = overlay;
+        map.setCenter(pos);
+        map.setLevel(2);
+      }
 
       if (onMapClick) {
         const geo = new kakao.maps.services.Geocoder();

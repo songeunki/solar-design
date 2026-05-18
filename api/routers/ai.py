@@ -124,7 +124,7 @@ def _iter_gemini_sse(prompt: str, api_key: str):
 
 @router.post("/api/ai-evaluate")
 async def ai_evaluate(req: AiEvaluateRequest):
-    """Gemini 2.5 Flash로 태양광 입지 종합 평가 (SSE 스트리밍, 429 재시도 포함)."""
+    """Gemini 2.0 Flash로 태양광 입지 종합 평가 (SSE 스트리밍, 429 재시도 포함)."""
     from config import GEMINI_API_KEY
     if not GEMINI_API_KEY:
         raise HTTPException(
