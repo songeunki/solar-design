@@ -1,12 +1,11 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState } from 'react';
 import KakaoMap from './KakaoMap';
 import MonthlyChart from './MonthlyChart';
 import SolarAltitudeChart from './SolarAltitudeChart';
 import PanelLayoutViewer from './PanelLayoutViewer';
+import PanelLayoutCanvas from './PanelLayoutCanvas';
 import BuildingInfo from './BuildingInfo';
 import DownloadButtons from './DownloadButtons';
-
-const PanelLayout3D = lazy(() => import('./PanelLayout3D'));
 
 const TABS = [
   { id: 'location',   icon: 'fa-solid fa-location-dot',    label: '입지' },
@@ -512,7 +511,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   title="🔲 태양광 패널 가상 배치도"
                   right={
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {[{ id: '2d', label: '📐 2D' }, { id: '3d', label: '🧊 3D' }].map(({ id, label }) => (
+                      {[{ id: '2d', label: '📐 SVG' }, { id: '3d', label: '🎨 Canvas' }].map(({ id, label }) => (
                         <button key={id} onClick={() => setLayoutTab(id)} style={{
                           padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
                           fontWeight: 600, fontSize: 12, transition: 'all 0.15s',
@@ -530,14 +529,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   {layoutTab === '2d' ? (
                     <PanelLayoutViewer layout={panel_layout} lat={result.lat} />
                   ) : (
-                    <Suspense fallback={
-                      <div style={{ height: 460, display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
-                        <span className="spinner" style={{ marginRight: 8 }} />3D 뷰어 로딩 중...
-                      </div>
-                    }>
-                      <PanelLayout3D layout={panel_layout} building={building} lat={result.lat} />
-                    </Suspense>
+                    <PanelLayoutCanvas layout={panel_layout} />
                   )}
                 </div>
               </div>
