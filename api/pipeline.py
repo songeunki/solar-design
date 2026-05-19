@@ -83,6 +83,12 @@ def run_pipeline(
         if raw_polygon else None
     )
 
+    # [DEBUG] 방위각 진단 로그
+    print(f"[AZIMUTH_DEBUG] address={address!r}")
+    print(f"[AZIMUTH_DEBUG] roof.azimuth_deg={roof.azimuth_deg}  effective={effective_azimuth}  source={azimuth_source}")
+    print(f"[AZIMUTH_DEBUG] raw_polygon={'None' if raw_polygon is None else f'{len(raw_polygon)}pts'}  roof_polygon_dicts={'None' if roof_polygon_dicts is None else f'{len(roof_polygon_dicts)}pts'}")
+    print(f"[AZIMUTH_DEBUG] will_use_polygon={effective_azimuth == 180.0 and roof_polygon_dicts is not None}")
+
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
         lng=location.lng,

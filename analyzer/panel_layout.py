@@ -193,7 +193,11 @@ class PanelLayoutEngine:
         # ── 8. 방위각 회전 설정 ───────────────────────────────────────────
         # 기본값(180°) + 폴리곤 있으면 가장 긴 변 기준 남향 면으로 자동 계산
         if azimuth_deg == 180.0 and roof_polygon:
-            azimuth_deg = calculate_optimal_azimuth(roof_polygon)
+            poly_azimuth = calculate_optimal_azimuth(roof_polygon)
+            print(f"[AZIMUTH_DEBUG] polygon_calc: {len(roof_polygon)}pts → {poly_azimuth}°")
+            azimuth_deg = poly_azimuth
+        else:
+            print(f"[AZIMUTH_DEBUG] polygon_calc skipped: azimuth_deg={azimuth_deg}  roof_polygon={'None' if roof_polygon is None else f'{len(roof_polygon)}pts'}")
         # rot_rad = azimuth_deg - 180  (정남향=0°, SE=-45°, SW=+45°)
         rot_rad = math.radians(azimuth_deg - 180.0)
         cos_r   = math.cos(rot_rad)
