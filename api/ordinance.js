@@ -65,7 +65,12 @@ export default async function handler(req, res) {
 
     let ordinance;
     try {
-      ordinance = JSON.parse(text.replace(/```json|```/g, '').trim());
+      const cleaned = text
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+      ordinance = JSON.parse(cleaned);
     } catch {
       ordinance = { raw: text };
     }
