@@ -604,12 +604,12 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                           ))}
                         </div>
                       </div>
-                      {reg.errors.length > 0 && (
+                      {reg.errors.filter(e => !e.includes('토지특성')).length > 0 && (
                         <div style={{
                           background: '#fffbeb', border: '1px solid #fde68a',
                           borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#744210',
                         }}>
-                          ⚠️ {reg.errors.join(' · ')}
+                          ⚠️ {reg.errors.filter(e => !e.includes('토지특성')).join(' · ')}
                         </div>
                       )}
                     </div>

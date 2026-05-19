@@ -1279,9 +1279,7 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  overflow: hidden;
-  overflow-y: auto;
-  max-height: calc(100vh - var(--header-height) - 160px);
+  overflow: visible;
 }
 
 /* 다크 탭 오버라이드 */
