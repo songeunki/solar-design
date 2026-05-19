@@ -1,5 +1,7 @@
 // Vercel Serverless Function — 조례 API 서버 발신 IP 확인
 
+export const config = { regions: ['icn1'] };
+
 export default async function handler(req, res) {
   let ip = 'unknown';
   try {

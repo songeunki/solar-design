@@ -3,6 +3,8 @@
 // 우선순위:
 //   1. data.go.kr 법제처 자치법규 API (DATA_GO_KR_KEY) — IP 제한 없음
 //   2. law.go.kr DRF lawSearch.do    (LAW_API_KEY)      — IP 등록 필요
+
+export const config = { regions: ['icn1'] };
 //
 // data.go.kr 키 발급: https://www.data.go.kr → 법제처 자치법규 검색 → 활용신청
 
