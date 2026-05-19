@@ -667,26 +667,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                   <div className="card card-accent">
                     <SectionHeader title="🌱 토지 특성" />
                     <div style={{ padding: '0 24px 16px' }}>
-                      {/* 토지특성 API 오류 알림 */}
-                      {reg.errors.some(e => e.includes('토지특성 API') || e.includes('토지특성 정보')) && (
-                        <div style={{
-                          background: '#fffbeb', border: '1px solid #fde68a',
-                          borderRadius: 8, padding: '10px 14px', margin: '8px 0 12px',
-                          fontSize: 12, color: '#744210',
-                        }}>
-                          ⚠️ {reg.errors.find(e => e.includes('토지특성'))}
-                          {reg.pnu && (
-                            <a
-                              href="https://map.vworld.kr/map/maps.do"
-                              target="_blank" rel="noopener noreferrer"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8, color: '#2b6cb0', textDecoration: 'underline' }}
-                            >
-                              <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }}></i>
-                              V-World 지도에서 직접 확인
-                            </a>
-                          )}
-                        </div>
-                      )}
                       {[
                         { label: 'PNU', value: reg.pnu || '정보 없음', cls: '' },
                         { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음', cls: reg.isFarmland ? 'orange' : '' },
