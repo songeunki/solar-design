@@ -1,117 +1,99 @@
-// Vercel Serverless Function — 자치법규 조회
-//
-// 우선순위:
-//   1. data.go.kr 법제처 자치법규 API (DATA_GO_KR_KEY) — IP 제한 없음
-//   2. law.go.kr DRF lawSearch.do    (LAW_API_KEY)      — IP 등록 필요
+// Vercel Serverless Function — 태양광 자치법규 조회 (Gemini AI 기반)
+// IP 제한 없이 어디서나 호출 가능
 
 export const config = { regions: ['icn1'] };
-//
-// data.go.kr 키 발급: https://www.data.go.kr → 법제처 자치법규 검색 → 활용신청
 
-const DATA_GO_KR_URL = 'http://apis.data.go.kr/1170000/law/lawSearchList.do';
-const LAW_GO_KR_URL  = 'https://www.law.go.kr/DRF/lawSearch.do';
-const KEYWORDS       = ['태양광', '신재생에너지'];
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-async function searchWithDataGoKr(key, sido, sigungu) {
-  const results = [];
-  for (const kw of KEYWORDS) {
-    try {
-      const params = new URLSearchParams({
-        serviceKey: key,
-        target: 'ordin', type: 'JSON', display: '20', page: '1', query: kw,
-      });
-      const resp = await fetch(`${DATA_GO_KR_URL}?${params}`);
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      _extractLaws(data, kw, sido, sigungu, results);
-    } catch (_) {}
-  }
-  return results;
+async function queryGemini(apiKey, sido, sigungu) {
+  const region = [sido, sigungu].filter(Boolean).join(' ');
+
+  const prompt = `당신은 한국 태양광 정책 전문가입니다.
+${region}의 태양광 관련 자치법규(조례) 정보를 제공해주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+{
+  "ordinances": [
+    {
+      "title": "실제 조례명 (정확히)",
+      "organ": "${sigungu || sido}",
+      "date": "공포일자 YYYYMMDD (모르면 빈문자열)",
+      "note": "조례 주요 내용 한 줄"
+    }
+  ],
+  "restrictions": "태양광 설치 제한 사항 1-2문장",
+  "support": "보조금·융자 등 지원 내용 1-2문장",
+  "procedure": "허가·신고 절차 요약 1-2문장"
 }
 
-async function searchWithLawGoKr(key, sido, sigungu) {
-  const results = [];
-  for (const kw of KEYWORDS) {
-    try {
-      const params = new URLSearchParams({
-        OC: key, target: 'ordin', type: 'JSON', display: '20', page: '1', query: kw,
-      });
-      const resp = await fetch(`${LAW_GO_KR_URL}?${params}`);
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      _extractLaws(data, kw, sido, sigungu, results);
-    } catch (_) {}
-  }
-  return results;
-}
+조건:
+- 실제 존재하는 조례만 포함 (확실하지 않으면 제외)
+- 없으면 ordinances: []
+- 광역시도 조례와 시군구 조례 모두 포함`;
 
-function _extractLaws(data, kw, sido, sigungu, out) {
-  // data.go.kr: OrdinSearch.law  /  law.go.kr: OrdinSearch.law (동일 구조)
-  const raw  = data?.OrdinSearch?.law ?? [];
-  const laws = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  const resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+    }),
+  });
 
-  for (const law of laws) {
-    const title = (law['자치법규명'] || '').trim();
-    const organ = (law['지자체기관명'] || '').trim();
+  if (!resp.ok) return null;
 
-    if (!title || /^\d+$/.test(title) || title.length < 5) continue;
+  const data  = await resp.json();
+  const text  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return null;
 
-    if (sido && organ) {
-      const sidoMatch = organ.includes(sido.slice(0, 2)) || sido.slice(0, 2) && sido.includes(organ.slice(0, 2));
-      const sgMatch   = sigungu && (organ.includes(sigungu) || sigungu.includes(organ));
-      if (!sidoMatch && !sgMatch) continue;
-    }
-
-    if (!out.find(o => o.title === title)) {
-      const mst = law['자치법규일련번호'] || '';
-      out.push({
-        title,
-        organ,
-        date: law['공포일자'] || '',
-        link: mst
-          ? `https://www.law.go.kr/ordinInfoP.do?ordinSeq=${mst}`
-          : `https://www.law.go.kr/ordinSc.do?query=${encodeURIComponent(kw)}`,
-      });
-    }
-  }
+  return JSON.parse(match[0]);
 }
 
 export default async function handler(req, res) {
   const { sido = '', sigungu = '' } = req.query;
+  const geminiKey = process.env.GEMINI_API_KEY || '';
 
-  const dataKey = process.env.DATA_GO_KR_KEY || '';
-  const lawKey  = process.env.LAW_API_KEY    || '';
+  const fallbackUrl = `https://www.law.go.kr/ordinSc.do?query=${encodeURIComponent('태양광')}`;
 
   const empty = {
-    found: false, message: '해당 지역 관련 조례를 찾지 못했습니다.',
+    found: false,
+    message: '해당 지역 관련 조례를 찾지 못했습니다.',
     ordinances: [], summary: null,
-    fallback_url: 'https://www.law.go.kr/ordinSc.do?query=태양광',
+    fallback_url: fallbackUrl,
     sido, sigungu, source: 'none',
   };
 
-  if (!dataKey && !lawKey) return res.status(200).json(empty);
+  if (!geminiKey || !sido) return res.status(200).json(empty);
 
-  let ordinances = [];
-  let source = '';
+  let result = null;
+  try {
+    result = await queryGemini(geminiKey, sido, sigungu);
+  } catch (_) {}
 
-  // 1순위: data.go.kr (IP 제한 없음)
-  if (dataKey) {
-    ordinances = await searchWithDataGoKr(dataKey, sido, sigungu);
-    source = 'data.go.kr';
-  }
+  if (!result) return res.status(200).json({ ...empty, source: 'gemini_error' });
 
-  // 2순위: law.go.kr 폴백 (IP 등록 필요)
-  if (ordinances.length === 0 && lawKey) {
-    ordinances = await searchWithLawGoKr(lawKey, sido, sigungu);
-    source = 'law.go.kr';
-  }
+  const ordinances = (result.ordinances || [])
+    .map(o => ({
+      title:  (o.title  || '').trim(),
+      organ:  (o.organ  || sigungu || sido).trim(),
+      date:   (o.date   || '').trim(),
+      note:   (o.note   || '').trim(),
+      link:   fallbackUrl,
+    }))
+    .filter(o => o.title && !/^\d+$/.test(o.title) && o.title.length >= 5);
 
-  res.status(200).json({
+  const hasSummary = result.restrictions || result.support || result.procedure;
+  const summary = hasSummary
+    ? { restrictions: result.restrictions || '', support: result.support || '', procedure: result.procedure || '' }
+    : null;
+
+  return res.status(200).json({
     found:        ordinances.length > 0,
     message:      ordinances.length === 0 ? '해당 지역 관련 조례를 찾지 못했습니다.' : '',
     ordinances:   ordinances.slice(0, 5),
-    summary:      null,
-    fallback_url: 'https://www.law.go.kr/ordinSc.do?query=태양광',
-    sido, sigungu, source,
+    summary,
+    fallback_url: fallbackUrl,
+    sido, sigungu, source: 'gemini',
   });
 }

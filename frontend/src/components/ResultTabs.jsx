@@ -871,6 +871,7 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                                       {o.title}
                                     </a>
                                     {o.date && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{o.date}</span>}
+                                    {o.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{o.note}</div>}
                                   </div>
                                 ))}
                               </div>
