@@ -1,7 +1,7 @@
 export const config = { regions: ['icn1'] };
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent';
 
 async function queryGemini(apiKey, sido, sigungu) {
   const region = [sido, sigungu].filter(Boolean).join(' ');
