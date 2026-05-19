@@ -22,7 +22,7 @@ ${region}의 태양광 발전 설치 관련 주요 조례 내용을 아래 JSON 
   "confidence": "high/medium/low"
 }`;
 
-  const res = await fetch(GEMINI_URL, {
+  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
