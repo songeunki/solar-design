@@ -40,14 +40,38 @@ ${region}의 태양광 관련 자치법규(조례) 정보를 제공해주세요.
     }),
   });
 
-  if (!resp.ok) return null;
+  const rawBody = await resp.text();
 
-  const data  = await resp.json();
-  const text  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!resp.ok) {
+    throw new Error(`Gemini HTTP ${resp.status}: ${rawBody.slice(0, 300)}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(rawBody);
+  } catch (e) {
+    throw new Error(`Gemini 응답 JSON 파싱 실패: ${rawBody.slice(0, 200)}`);
+  }
+
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) {
+    const blockReason  = data?.promptFeedback?.blockReason;
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    throw new Error(
+      `Gemini 응답 텍스트 없음 — blockReason=${blockReason ?? 'none'}, finishReason=${finishReason ?? 'none'}, raw=${JSON.stringify(data).slice(0, 200)}`
+    );
+  }
+
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match) {
+    throw new Error(`Gemini 응답에 JSON 블록 없음 — text=${text.slice(0, 200)}`);
+  }
 
-  return JSON.parse(match[0]);
+  try {
+    return JSON.parse(match[0]);
+  } catch (e) {
+    throw new Error(`Gemini JSON 파싱 실패 — ${e.message} — matched=${match[0].slice(0, 200)}`);
+  }
 }
 
 export default async function handler(req, res) {
@@ -64,14 +88,53 @@ export default async function handler(req, res) {
     sido, sigungu, source: 'none',
   };
 
-  if (!geminiKey || !sido) return res.status(200).json(empty);
+  // ?debug=1 → 환경변수·API 호출 진단 정보 반환
+  if (req.query.debug === '1') {
+    const dbg = { GEMINI_API_KEY_set: !!geminiKey, GEMINI_API_KEY_prefix: geminiKey.slice(0, 8) + '...', sido, sigungu };
+    if (geminiKey) {
+      try {
+        const region = [sido, sigungu].filter(Boolean).join(' ') || '서울특별시 강남구';
+        const testResp = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: `"${region}" 태양광 조례 한 줄 요약` }] }], generationConfig: { maxOutputTokens: 100 } }),
+        });
+        const rawText = await testResp.text();
+        dbg.gemini_http_status = testResp.status;
+        dbg.gemini_ok = testResp.ok;
+        if (testResp.ok) {
+          let parsed;
+          try { parsed = JSON.parse(rawText); } catch (_) { /* ignore */ }
+          dbg.gemini_response_preview = parsed?.candidates?.[0]?.content?.parts?.[0]?.text?.slice(0, 200)
+            ?? rawText.slice(0, 300);
+          dbg.gemini_block_reason  = parsed?.promptFeedback?.blockReason ?? null;
+          dbg.gemini_finish_reason = parsed?.candidates?.[0]?.finishReason ?? null;
+        } else {
+          dbg.gemini_error_body = rawText.slice(0, 400);
+        }
+      } catch (e) {
+        dbg.gemini_fetch_error = e.message;
+      }
+    }
+    return res.status(200).json(dbg);
+  }
+
+  console.log('[ordinance] key_set=%s sido=%s sigungu=%s', !!geminiKey, sido, sigungu);
+
+  if (!geminiKey) return res.status(200).json({ ...empty, source: 'no_api_key' });
+  if (!sido) return res.status(200).json(empty);
 
   let result = null;
+  let geminiError = null;
   try {
     result = await queryGemini(geminiKey, sido, sigungu);
-  } catch (_) {}
+    console.log('[ordinance] gemini ok, ordinances=%d', result?.ordinances?.length ?? 0);
+  } catch (e) {
+    geminiError = e.message;
+    console.error('[ordinance] gemini error:', e.message);
+  }
 
-  if (!result) return res.status(200).json({ ...empty, source: 'gemini_error' });
+  if (!result) return res.status(200).json({ ...empty, source: 'gemini_error', error: geminiError });
 
   const ordinances = (result.ordinances || [])
     .map(o => ({
