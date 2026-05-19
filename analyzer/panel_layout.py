@@ -11,6 +11,45 @@ PANEL_H = 1.134   # 남북(NS) 높이 — 단변
 M_PER_DEG_LAT = 111_320
 
 
+def calculate_optimal_azimuth(polygon_coords: list[dict]) -> float:
+    """
+    건물 폴리곤의 가장 긴 변을 기준으로 남향(180°)에 가장 가까운 면의 방위각 반환.
+    polygon_coords: [{"lat": ..., "lng": ...}, ...]
+    """
+    if not polygon_coords or len(polygon_coords) < 2:
+        return 180.0
+
+    n = len(polygon_coords)
+    best_len = -1.0
+    best_azimuth = 180.0
+
+    def _angle_diff(a: float, b: float) -> float:
+        d = abs(a - b) % 360
+        return min(d, 360 - d)
+
+    for i in range(n):
+        p1 = polygon_coords[i]
+        p2 = polygon_coords[(i + 1) % n]
+        mid_lat = (p1["lat"] + p2["lat"]) / 2
+        dy = (p2["lat"] - p1["lat"]) * M_PER_DEG_LAT
+        dx = (p2["lng"] - p1["lng"]) * M_PER_DEG_LAT * math.cos(math.radians(mid_lat))
+        length = math.hypot(dx, dy)
+        if length < 0.1:
+            continue
+
+        # 엣지 방위각 (북=0, 동=90, 남=180) 기준 수직 두 방향 중 남향에 가까운 쪽 선택
+        edge_bearing = math.degrees(math.atan2(dx, dy)) % 360
+        face1 = (edge_bearing + 90) % 360
+        face2 = (edge_bearing - 90 + 360) % 360
+        face = face1 if _angle_diff(face1, 180) <= _angle_diff(face2, 180) else face2
+
+        if length > best_len:
+            best_len = length
+            best_azimuth = face
+
+    return round(best_azimuth, 1)
+
+
 def _meter_to_latlng(
     center_lat: float, center_lng: float,
     dx_east: float, dy_north: float,
@@ -152,6 +191,9 @@ class PanelLayoutEngine:
         col_spacing_deg = col_spacing_m / m_lng
 
         # ── 8. 방위각 회전 설정 ───────────────────────────────────────────
+        # 기본값(180°) + 폴리곤 있으면 가장 긴 변 기준 남향 면으로 자동 계산
+        if azimuth_deg == 180.0 and roof_polygon:
+            azimuth_deg = calculate_optimal_azimuth(roof_polygon)
         # rot_rad = azimuth_deg - 180  (정남향=0°, SE=-45°, SW=+45°)
         rot_rad = math.radians(azimuth_deg - 180.0)
         cos_r   = math.cos(rot_rad)

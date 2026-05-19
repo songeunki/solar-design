@@ -1,13 +1,37 @@
 from __future__ import annotations
 import asyncio
 import base64
+import json
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 from api.pipeline import run_pipeline
+
+_LOG_FILE = pathlib.Path(__file__).parent.parent.parent / "analysis_log.json"
+
+
+def _append_log(address: str, result: dict) -> None:
+    entry = {
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "address":     address,
+        "capacity_kw": result.get("system", {}).get("totalKw", 0),
+        "annual_kwh":  result.get("system", {}).get("yearlyTotal", 0),
+        "roi_years":   result.get("financial", {}).get("paybackYear", 0),
+        "azimuth_deg": result.get("building", {}).get("azimuth", 180),
+    }
+    logs: list = []
+    if _LOG_FILE.exists():
+        try:
+            logs = json.loads(_LOG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    logs.append(entry)
+    _LOG_FILE.write_text(json.dumps(logs, ensure_ascii=False, indent=2), encoding="utf-8")
 
 router = APIRouter(tags=["analyze"])
 
@@ -224,6 +248,10 @@ async def ws_analyze(websocket: WebSocket):
                 queue.put({"type": "result", "data": result}),
                 loop,
             )
+            try:
+                _append_log(address, result)
+            except Exception:
+                pass
         except Exception as exc:
             asyncio.run_coroutine_threadsafe(
                 queue.put({"type": "error", "message": str(exc)}),

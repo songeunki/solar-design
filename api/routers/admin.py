@@ -9,6 +9,7 @@ router = APIRouter(tags=["admin"])
 
 _PASSWORD    = "solar1234"
 _CONFIG_FILE = pathlib.Path(__file__).parent.parent.parent / "admin_config.json"
+_LOG_FILE    = pathlib.Path(__file__).parent.parent.parent / "analysis_log.json"
 
 _DEFAULTS: dict = {
     "panel_watt":       640,
@@ -54,6 +55,17 @@ class AdminConfigBody(BaseModel):
     panel_height_m:   float | None = None
     revenue_per_kwh:  float | None = None
     cost_per_kw:      float | None = None   # 만원/kW
+
+
+@router.get("/api/admin/logs")
+async def get_logs(password: str):
+    _check(password)
+    if not _LOG_FILE.exists():
+        return []
+    try:
+        return json.loads(_LOG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=500, detail="로그 파일 읽기 실패")
 
 
 @router.post("/api/admin/config")
