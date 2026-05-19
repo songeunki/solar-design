@@ -5,29 +5,15 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemi
 
 async function queryGemini(apiKey, sido, sigungu) {
   const region = [sido, sigungu].filter(Boolean).join(' ');
-  const prompt = `당신은 대한민국 태양광 발전 관련 지자체 조례 전문가입니다.
-${region}의 태양광 발전 설치 관련 주요 조례 내용을 아래 JSON 형식으로만 응답하세요.
-마크다운 코드블록 없이 순수 JSON만 출력하세요.
-
-{
-  "region": "${region}",
-  "permit_threshold_kw": 100,
-  "setback_residential_m": 100,
-  "setback_road_m": 20,
-  "noise_limit_db": 45,
-  "max_slope_deg": 15,
-  "landscape_review": true,
-  "notes": "주요 특이사항 1~2줄",
-  "source": "조례 출처 또는 추정 근거",
-  "confidence": "high/medium/low"
-}`;
+  const prompt = `${sido} ${sigungu} 태양광 설치 조례를 JSON으로만 답해. 설명 없이 JSON만.
+{"region":"${sido} ${sigungu}","permit_threshold_kw":숫자,"setback_residential_m":숫자,"setback_road_m":숫자,"landscape_review":true/false,"notes":"한줄요약","confidence":"high/medium/low"}`;
 
   const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+      generationConfig: { temperature: 0.2, maxOutputTokens: 512 }
     })
   });
 
