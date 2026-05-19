@@ -61,9 +61,11 @@ class AdminConfigBody(BaseModel):
 async def get_logs(password: str):
     _check(password)
     if not _LOG_FILE.exists():
-        return []
+        return {"total_count": 0, "logs": []}
     try:
-        return json.loads(_LOG_FILE.read_text(encoding="utf-8"))
+        logs = json.loads(_LOG_FILE.read_text(encoding="utf-8"))
+        logs_sorted = sorted(logs, key=lambda x: x.get("timestamp", ""), reverse=True)
+        return {"total_count": len(logs_sorted), "logs": logs_sorted}
     except Exception:
         raise HTTPException(status_code=500, detail="로그 파일 읽기 실패")
 

@@ -57,12 +57,14 @@ function formToApi(form, password) {
 }
 
 export default function AdminPage() {
-  const [phase,    setPhase]    = useState('login');   // login | config
+  const [phase,    setPhase]    = useState('login');   // login | config | logs
   const [pw,       setPw]       = useState('');
   const [pwError,  setPwError]  = useState('');
   const [form,     setForm]     = useState(DEFAULTS_FORM);
   const [status,   setStatus]   = useState('');        // '' | 'saving' | 'saved' | 'error'
   const [loading,  setLoading]  = useState(false);
+  const [logs,     setLogs]     = useState(null);      // null | {total_count, logs}
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // ── 로그인 ───────────────────────────────────────────────────────────────────
   const handleLogin = async () => {
@@ -81,6 +83,24 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
+
+  // ── 로그 조회 ────────────────────────────────────────────────────────────────
+  const fetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`${HTTP_BASE}/api/admin/logs?password=${encodeURIComponent(pw)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setLogs(await res.json());
+    } catch (e) {
+      setLogs({ total_count: 0, logs: [], error: e.message });
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (phase === 'logs' && logs === null) fetchLogs();
+  }, [phase]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleLogin(); };
 
@@ -109,10 +129,10 @@ export default function AdminPage() {
   // ── 헤더 ─────────────────────────────────────────────────────────────────────
   const Header = () => (
     <header style={{
-      background: 'var(--blue)', height: 60, padding: '0 24px',
+      background: 'var(--blue)', padding: '0 24px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      position: 'sticky', top: 0, zIndex: 100,
-      boxShadow: '0 2px 12px rgba(30,111,217,0.25)',
+      position: 'sticky', top: 0, zIndex: 100, minHeight: 60,
+      boxShadow: '0 2px 12px rgba(30,111,217,0.25)', flexWrap: 'wrap', gap: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <div style={{
@@ -124,14 +144,18 @@ export default function AdminPage() {
           SolarDesign AI
         </span>
       </div>
+      {phase !== 'login' && (
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[{key:'config', label:'⚙️ 기준값 설정'}, {key:'logs', label:'📋 분석 로그'}].map(t => (
+            <button key={t.key} onClick={() => setPhase(t.key)} style={{
+              background: phase === t.key ? 'rgba(255,255,255,0.25)' : 'transparent',
+              border: '1px solid rgba(255,255,255,0.3)', color: 'white',
+              borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>{t.label}</button>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span style={{
-          background: 'rgba(255,255,255,0.15)', color: 'white',
-          fontSize: 12, padding: '4px 12px', borderRadius: 20,
-          border: '1px solid rgba(255,255,255,0.3)', whiteSpace: 'nowrap',
-        }}>
-          <i className="fa-solid fa-gear"></i> 관리자 설정
-        </span>
         <a href="/" style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
           <i className="fa-solid fa-arrow-left"></i> 메인으로
         </a>
@@ -198,6 +222,68 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── 로그 화면 ─────────────────────────────────────────────────────────────────
+  if (phase === 'logs') {
+    const rows = logs?.logs ?? [];
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Noto Sans KR', sans-serif" }}>
+        <Header />
+        <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px 64px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
+                분석 로그
+              </h1>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                총 <strong>{logs?.total_count ?? '…'}</strong>건의 분석 기록
+              </p>
+            </div>
+            <button className="btn btn-outline" onClick={() => { setLogs(null); fetchLogs(); }} disabled={logsLoading}
+              style={{ fontSize: 13, padding: '8px 18px' }}>
+              {logsLoading ? <><span className="spinner" style={{ marginRight: 6 }} />로딩 중…</> : <><i className="fa-solid fa-arrows-rotate"></i> 새로고침</>}
+            </button>
+          </div>
+
+          {logs?.error && (
+            <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#c53030', fontSize: 13 }}>
+              ⚠️ {logs.error}
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)', background: 'white' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
+                  {['#', '시간 (UTC)', 'IP', '주소', '용량(kW)', '연간발전(kWh)', '회수기간(년)'].map(h => (
+                    <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {logsLoading ? '로딩 중…' : '분석 기록이 없습니다.'}
+                  </td></tr>
+                )}
+                {rows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'white' : 'var(--bg)' }}>
+                    <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontWeight: 600 }}>{(logs?.total_count ?? rows.length) - i}</td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{r.timestamp?.replace('T', ' ')}</td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12 }}>{r.ip}</td>
+                    <td style={{ padding: '10px 14px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.address}>{r.address}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{r.capacity_kw}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>{r.annual_kwh?.toLocaleString?.()}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>{r.roi_years}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </main>
       </div>
     );
   }

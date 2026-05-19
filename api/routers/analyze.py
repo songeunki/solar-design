@@ -15,9 +15,17 @@ from api.pipeline import run_pipeline
 _LOG_FILE = pathlib.Path(__file__).parent.parent.parent / "analysis_log.json"
 
 
-def _append_log(address: str, result: dict) -> None:
+def _get_client_ip(websocket: WebSocket) -> str:
+    forwarded = websocket.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return websocket.client.host if websocket.client else "unknown"
+
+
+def _append_log(address: str, result: dict, ip: str = "unknown") -> None:
     entry = {
-        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "timestamp":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "ip":          ip,
         "address":     address,
         "capacity_kw": result.get("system", {}).get("totalKw", 0),
         "annual_kwh":  result.get("system", {}).get("yearlyTotal", 0),
@@ -232,6 +240,7 @@ async def ws_analyze(websocket: WebSocket):
     except WebSocketDisconnect:
         return
 
+    client_ip = _get_client_ip(websocket)
     loop:  asyncio.AbstractEventLoop = asyncio.get_running_loop()
     queue: asyncio.Queue[dict]       = asyncio.Queue()
 
@@ -249,7 +258,7 @@ async def ws_analyze(websocket: WebSocket):
                 loop,
             )
             try:
-                _append_log(address, result)
+                _append_log(address, result, ip=client_ip)
             except Exception:
                 pass
         except Exception as exc:
