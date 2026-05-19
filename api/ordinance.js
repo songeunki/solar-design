@@ -27,7 +27,7 @@ ${region}의 태양광 발전 설치 관련 주요 조례 내용을 아래 JSON 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
     })
   });
 
@@ -64,14 +64,10 @@ export default async function handler(req, res) {
     const elapsed = Date.now() - start;
 
     let ordinance;
-    try {
-      const cleaned = text
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
-      ordinance = JSON.parse(cleaned);
-    } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      ordinance = JSON.parse(match[0]);
+    } else {
       ordinance = { raw: text };
     }
 
