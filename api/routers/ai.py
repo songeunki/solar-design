@@ -11,9 +11,9 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["ai"])
 
-_GEMINI_STREAM_URL = (
+_GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:streamGenerateContent?alt=sse&key={key}"
+    "gemini-2.5-flash:generateContent?key={key}"
 )
 
 # 429 방지: 호출 간 최소 간격
@@ -86,38 +86,27 @@ def _iter_gemini_sse(prompt: str, api_key: str):
             time.sleep(gap)
         _last_call_ts = time.time()
 
-    url = _GEMINI_STREAM_URL.format(key=api_key)
+    url = _GEMINI_URL.format(key=api_key)
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "maxOutputTokens": 1000,
             "temperature":     0.7,
+            "thinkingConfig":  {"thinkingBudget": 0},
         },
     }
 
-    with _req.post(url, json=payload, stream=True, timeout=90) as resp:
-        resp.raise_for_status()
-        for raw_line in resp.iter_lines():
-            if not raw_line:
-                continue
-            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
-            if not line.startswith("data: "):
-                continue
-            data_str = line[6:].strip()
-            if not data_str or data_str == "[DONE]":
-                continue
-            try:
-                chunk = json.loads(data_str)
-                text = (
-                    chunk.get("candidates", [{}])[0]
-                         .get("content", {})
-                         .get("parts", [{}])[0]
-                         .get("text", "")
-                )
-                if text:
-                    yield text
-            except (json.JSONDecodeError, IndexError, KeyError):
-                pass
+    resp = _req.post(url, json=payload, stream=False, timeout=90)
+    resp.raise_for_status()
+    data = resp.json()
+    text = (
+        data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "")
+    )
+    if text:
+        yield text
 
 
 # ── 엔드포인트 ────────────────────────────────────────────────────────────────
