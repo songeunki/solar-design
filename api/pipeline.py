@@ -76,6 +76,13 @@ def run_pipeline(
     osm_ew_m = building.extra.get("building_ew_m")
     osm_ns_m = building.extra.get("building_ns_m")
 
+    # OSM polygon → [{"lat":..., "lng":...}] 형식으로 변환 (저장 형식은 [[lon, lat], ...])
+    raw_polygon = building.extra.get("osm_polygon")  # [[lon, lat], ...]
+    roof_polygon_dicts = (
+        [{"lat": c[1], "lng": c[0]} for c in raw_polygon]
+        if raw_polygon else None
+    )
+
     panel_layout = PanelLayoutEngine().compute(
         lat=location.lat,
         lng=location.lng,
@@ -89,6 +96,7 @@ def run_pipeline(
         target_panel_count=electrical.panel_count,
         osm_building_ew_m=osm_ew_m,
         osm_building_ns_m=osm_ns_m,
+        roof_polygon=roof_polygon_dicts,
     )
 
     report = ReportGenerator().generate(
