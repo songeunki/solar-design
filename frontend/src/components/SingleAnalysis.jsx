@@ -12,6 +12,12 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     if (header) setHeaderH(header.offsetHeight);
   }, []);
 
+  const [showModal, setShowModal]         = useState(false);
+  const [status, setStatus]               = useState('idle');
+  const [step, setStep]                   = useState(0);
+  const [message, setMessage]             = useState('');
+  const [result, setResult]               = useState(null);
+
   // 분석 결과 있을 때 새로고침/탭 닫기 이탈 방지
   useEffect(() => {
     if (!result) return;
@@ -22,12 +28,6 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [result]);
-
-  const [showModal, setShowModal]         = useState(false);
-  const [status, setStatus]               = useState('idle');
-  const [step, setStep]                   = useState(0);
-  const [message, setMessage]             = useState('');
-  const [result, setResult]               = useState(null);
   const [errorMsg, setErrorMsg]           = useState('');
   const [markerPos, setMarkerPos]         = useState(null);
   const [buildingPolygon, setBuildingPolygon] = useState(null);
