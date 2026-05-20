@@ -4,7 +4,7 @@ import base64
 import json
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
@@ -24,7 +24,7 @@ def _get_client_ip(websocket: WebSocket) -> str:
 
 def _append_log(address: str, result: dict, ip: str = "unknown") -> None:
     entry = {
-        "timestamp":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "timestamp":   datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S"),
         "ip":          ip,
         "address":     address,
         "capacity_kw": result.get("system", {}).get("totalKw", 0),
