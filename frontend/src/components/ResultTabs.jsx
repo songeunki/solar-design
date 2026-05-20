@@ -270,14 +270,14 @@ function PanelLayout2D({ panelLayout }) {
   const drawH  = gridH + TOTAL_PAD * 2;
   const LABEL_H = 20;
 
-  // 나침반
-  const CR    = 26;
-  const CX    = drawW + 12 + CR;
-  const CY    = LABEL_H + CR + 6;
-
-  const SVG_W = CX + CR + 6;
-  const SVG_H = LABEL_H + drawH + 22;
+  // 나침반 (도면 아래 중앙)
+  const CR     = 26;
+  const CX     = drawW / 2;
   const DRAW_Y = LABEL_H;
+  const CY     = DRAW_Y + drawH + 16 + CR;   // 도면 하단 16px 간격 후 중심
+
+  const SVG_W  = drawW;
+  const SVG_H  = CY + CR + 16;               // 나침반 하단 + 방위각 텍스트
 
   // 남향 화살표
   const sRad = ((azimuth - 90) * Math.PI) / 180;
@@ -360,25 +360,25 @@ function PanelLayout2D({ panelLayout }) {
         {/* 패널 */}
         {panels}
 
-        {/* 하단 레이블 */}
-        <text x={drawW / 2} y={DRAW_Y + drawH + 15}
+        {/* 패널 수 레이블 (도면 하단 ~ 나침반 위 중간) */}
+        <text x={drawW / 2} y={DRAW_Y + drawH + 11}
               textAnchor="middle" fontSize={8.5}
               fill="rgba(0,191,255,0.75)" fontFamily="monospace">
           ACTIVE {activePanels} / TOTAL {rows * cols} PNL
         </text>
 
-        {/* 나침반 */}
-        <circle cx={CX} cy={CY} r={CR}    fill="#0A1628" stroke="rgba(0,191,255,0.65)" strokeWidth={1} />
+        {/* 나침반 (도면 아래 중앙) */}
+        <circle cx={CX} cy={CY} r={CR}     fill="#0A1628" stroke="rgba(0,191,255,0.65)" strokeWidth={1} />
         <circle cx={CX} cy={CY} r={CR - 5} fill="none"   stroke="rgba(0,191,255,0.2)"  strokeWidth={0.5} />
         {/* 십자선 */}
         <line x1={CX} y1={CY-CR+12} x2={CX} y2={CY+CR-12}
               stroke="rgba(255,255,255,0.15)" strokeWidth={0.5} />
         <line x1={CX-CR+12} y1={CY} x2={CX+CR-12} y2={CY}
               stroke="rgba(255,255,255,0.15)" strokeWidth={0.5} />
-        <text x={CX}       y={CY-CR+11} textAnchor="middle" fontSize={8} fontWeight="700" fill="white"                    fontFamily="monospace">N</text>
-        <text x={CX}       y={CY+CR-3}  textAnchor="middle" fontSize={8} fontWeight="700" fill="#00BFFF"                  fontFamily="monospace">S</text>
-        <text x={CX+CR-4}  y={CY+3}     textAnchor="end"    fontSize={6.5}                fill="rgba(255,255,255,0.4)"    fontFamily="monospace">E</text>
-        <text x={CX-CR+4}  y={CY+3}     textAnchor="start"  fontSize={6.5}                fill="rgba(255,255,255,0.4)"    fontFamily="monospace">W</text>
+        <text x={CX}      y={CY-CR+11} textAnchor="middle" fontSize={8} fontWeight="700" fill="white"                 fontFamily="monospace">N</text>
+        <text x={CX}      y={CY+CR-3}  textAnchor="middle" fontSize={8} fontWeight="700" fill="#00BFFF"               fontFamily="monospace">S</text>
+        <text x={CX+CR-4} y={CY+3}     textAnchor="end"    fontSize={6.5}                fill="rgba(255,255,255,0.4)" fontFamily="monospace">E</text>
+        <text x={CX-CR+4} y={CY+3}     textAnchor="start"  fontSize={6.5}                fill="rgba(255,255,255,0.4)" fontFamily="monospace">W</text>
         {/* 남향 화살표 */}
         <line x1={CX} y1={CY} x2={sx} y2={sy}
               stroke="#00BFFF" strokeWidth={1.5} markerEnd="url(#arrowBP)" />
