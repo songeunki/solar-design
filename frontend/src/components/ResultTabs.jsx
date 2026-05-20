@@ -239,61 +239,86 @@ function SectionHeader({ title, badge, right }) {
 
 // ── 2D 모듈 배치도 ────────────────────────────────────────────────────────────
 function PanelLayout2D({ panelLayout }) {
-  const rows        = panelLayout?.stats?.row_count    || 3;
-  const cols        = panelLayout?.stats?.col_count    || 4;
+  const rows         = panelLayout?.stats?.row_count    || 3;
+  const cols         = panelLayout?.stats?.col_count    || 4;
   const activePanels = panelLayout?.stats?.active_panels ?? rows * cols;
-  const azimuth     = panelLayout?.stats?.azimuth_deg ?? 180;
+  const azimuth      = panelLayout?.stats?.azimuth_deg ?? 180;
 
-  // 패널 크기 자동 스케일 (최대 그리드 영역 300×220 px 기준)
-  const MAX_W = 300, MAX_H = 220;
-  const GAP_R = 0.18;           // gap = panel_size * GAP_R
-  const ASPECT = 22 / 34;      // panel width / height
+  // 패널 크기 (60% 축소: max 18)
+  const MAX_W = 180, MAX_H = 130;
+  const GAP_R = 0.18;
+  const ASPECT = 22 / 34;
 
   const colUnits = cols + (cols - 1) * GAP_R;
   const rowUnits = rows + (rows - 1) * GAP_R;
   const pwByW    = MAX_W / colUnits;
   const pwByH    = (MAX_H / rowUnits) * ASPECT;
-  const PW       = Math.max(4, Math.min(pwByW, pwByH, 30));
+  const PW       = Math.max(3, Math.min(pwByW, pwByH, 18));
   const PH       = PW / ASPECT;
   const GX       = PW * GAP_R;
   const GY       = PH * GAP_R;
 
   const gridW = cols * PW + (cols - 1) * GX;
   const gridH = rows * PH + (rows - 1) * GY;
-  const PAD   = 18;
-  const roofW = gridW + PAD * 2;
-  const roofH = gridH + PAD * 2;
 
-  // 나침반 위치 (지붕 오른쪽)
-  const CR = 32;
-  const CX = roofW + 14 + CR;
-  const CY = CR + 4;
+  // 이중 테두리 여백
+  const OUTER_PAD = 10;
+  const INNER_PAD = 18;
+  const TOTAL_PAD = OUTER_PAD + INNER_PAD;
+
+  const drawW  = gridW + TOTAL_PAD * 2;
+  const drawH  = gridH + TOTAL_PAD * 2;
+  const LABEL_H = 20;
+
+  // 나침반
+  const CR    = 26;
+  const CX    = drawW + 12 + CR;
+  const CY    = LABEL_H + CR + 6;
+
   const SVG_W = CX + CR + 6;
-  const SVG_H = roofH + 28;
+  const SVG_H = LABEL_H + drawH + 22;
+  const DRAW_Y = LABEL_H;
 
-  // 남향 화살표 (azimuth=180 → 아래쪽)
+  // 남향 화살표
   const sRad = ((azimuth - 90) * Math.PI) / 180;
-  const sLen = CR - 8;
+  const sLen = CR - 7;
   const sx   = CX + sLen * Math.cos(sRad);
   const sy   = CY + sLen * Math.sin(sRad);
 
+  // 배경 그리드 라인
+  const GRID_STEP = 14;
+  const gridLines = [];
+  for (let gx = GRID_STEP; gx < drawW; gx += GRID_STEP) {
+    gridLines.push(
+      <line key={`gx${gx}`} x1={gx} y1={DRAW_Y} x2={gx} y2={DRAW_Y + drawH}
+            stroke="rgba(255,255,255,0.07)" strokeWidth={0.5} strokeDasharray="2,4" />
+    );
+  }
+  for (let gy = GRID_STEP; gy < drawH; gy += GRID_STEP) {
+    gridLines.push(
+      <line key={`gy${gy}`} x1={0} y1={DRAW_Y + gy} x2={drawW} y2={DRAW_Y + gy}
+            stroke="rgba(255,255,255,0.07)" strokeWidth={0.5} strokeDasharray="2,4" />
+    );
+  }
+
+  // 패널 렌더링
   const panels = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const n      = r * cols + c + 1;
       const active = n <= activePanels;
-      const x      = PAD + c * (PW + GX);
-      const y      = PAD + r * (PH + GY);
+      const x      = TOTAL_PAD + c * (PW + GX);
+      const y      = DRAW_Y + TOTAL_PAD + r * (PH + GY);
       panels.push(
         <g key={`p${r}-${c}`}>
-          <rect x={x} y={y} width={PW} height={PH} rx={1.5}
-                fill={active ? '#3182ce' : '#e2e8f0'}
-                stroke={active ? '#2b6cb0' : '#a0aec0'}
-                strokeWidth={0.7} />
-          {active && PW >= 12 && <>
-            <line x1={x+PW*.33} y1={y+1.5} x2={x+PW*.33} y2={y+PH-1.5} stroke="#bee3f8" strokeWidth={0.5}/>
-            <line x1={x+PW*.67} y1={y+1.5} x2={x+PW*.67} y2={y+PH-1.5} stroke="#bee3f8" strokeWidth={0.5}/>
-            <line x1={x+1.5} y1={y+PH*.5} x2={x+PW-1.5} y2={y+PH*.5}   stroke="#bee3f8" strokeWidth={0.5}/>
+          <rect x={x} y={y} width={PW} height={PH} rx={1}
+                fill={active ? 'rgba(0,191,255,0.18)' : 'rgba(255,255,255,0.04)'}
+                stroke={active ? '#00BFFF' : 'rgba(0,191,255,0.25)'}
+                strokeWidth={active ? 0.8 : 0.5} />
+          {active && PW >= 9 && <>
+            <line x1={x+PW*.33} y1={y+1} x2={x+PW*.33} y2={y+PH-1} stroke="rgba(0,191,255,0.45)" strokeWidth={0.4}/>
+            <line x1={x+PW*.67} y1={y+1} x2={x+PW*.67} y2={y+PH-1} stroke="rgba(0,191,255,0.45)" strokeWidth={0.4}/>
+            <line x1={x+1} y1={y+PH*.5} x2={x+PW-1}   y2={y+PH*.5} stroke="rgba(0,191,255,0.45)" strokeWidth={0.4}/>
           </>}
         </g>
       );
@@ -301,39 +326,69 @@ function PanelLayout2D({ panelLayout }) {
   }
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{ width: '100%', height: 'auto' }}>
-      <defs>
-        <marker id="arrowS2D" markerWidth={7} markerHeight={7} refX={5} refY={3.5} orient="auto">
-          <polygon points="0,0 7,3.5 0,7" fill="#e53e3e" />
-        </marker>
-      </defs>
+    <div style={{ maxWidth: 500, margin: '0 auto' }}>
+      <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{ width: '100%', height: 'auto' }}>
+        <defs>
+          <marker id="arrowBP" markerWidth={7} markerHeight={7} refX={5} refY={3.5} orient="auto">
+            <polygon points="0,0 7,3.5 0,7" fill="#00BFFF" />
+          </marker>
+        </defs>
 
-      {/* 지붕 외곽 */}
-      <rect x={0} y={0} width={roofW} height={roofH} rx={6}
-            fill="#edf2f7" stroke="#a0aec0" strokeWidth={1.5} />
+        {/* 도면 배경 */}
+        <rect x={0} y={DRAW_Y} width={drawW} height={drawH} fill="#0A1628" />
+        {gridLines}
 
-      {/* 패널 격자 */}
-      {panels}
+        {/* 외부 테두리 */}
+        <rect x={0} y={DRAW_Y} width={drawW} height={drawH}
+              fill="none" stroke="rgba(0,191,255,0.65)" strokeWidth={1.2} />
+        {/* 내부 테두리 (이중) */}
+        <rect x={OUTER_PAD} y={DRAW_Y + OUTER_PAD}
+              width={drawW - OUTER_PAD * 2} height={drawH - OUTER_PAD * 2}
+              fill="none" stroke="rgba(0,191,255,0.28)" strokeWidth={0.6} />
 
-      {/* 하단 레이블 */}
-      <text x={roofW/2} y={roofH+18} textAnchor="middle" fontSize={10} fill="#718096">
-        {cols}열 × {rows}행 · 활성 {activePanels}매 / 전체 {rows*cols}매
-      </text>
+        {/* 상단 라벨바 */}
+        <rect x={0} y={0} width={drawW} height={LABEL_H} fill="rgba(0,191,255,0.12)" />
+        <rect x={0} y={0} width={drawW} height={LABEL_H}
+              fill="none" stroke="rgba(0,191,255,0.65)" strokeWidth={1.2} />
+        <text x={8} y={LABEL_H - 6} fontSize={8} fill="#00BFFF"
+              fontFamily="monospace" letterSpacing={1.2}>배치 평면도</text>
+        <text x={drawW - 8} y={LABEL_H - 6} fontSize={7.5}
+              fill="rgba(0,191,255,0.7)" textAnchor="end" fontFamily="monospace">
+          {cols}×{rows} ARRAY
+        </text>
 
-      {/* 나침반 원 */}
-      <circle cx={CX} cy={CY} r={CR} fill="white" stroke="#e2e8f0" strokeWidth={1} />
-      <text x={CX} y={CY-CR+12} textAnchor="middle" fontSize={9} fontWeight="700" fill="#718096">N</text>
-      <text x={CX} y={CY+CR-3}  textAnchor="middle" fontSize={9} fontWeight="700" fill="#e53e3e">S</text>
-      {/* 북쪽 기준선 */}
-      <line x1={CX} y1={CY} x2={CX} y2={CY-CR+14} stroke="#a0aec0" strokeWidth={1}/>
-      {/* 남향 방위각 화살표 */}
-      <line x1={CX} y1={CY} x2={sx} y2={sy}
-            stroke="#e53e3e" strokeWidth={2} markerEnd="url(#arrowS2D)" />
-      {/* 방위각 수치 */}
-      <text x={CX} y={CY+CR+15} textAnchor="middle" fontSize={10} fill="#4a5568">
-        {azimuth}°
-      </text>
-    </svg>
+        {/* 패널 */}
+        {panels}
+
+        {/* 하단 레이블 */}
+        <text x={drawW / 2} y={DRAW_Y + drawH + 15}
+              textAnchor="middle" fontSize={8.5}
+              fill="rgba(0,191,255,0.75)" fontFamily="monospace">
+          ACTIVE {activePanels} / TOTAL {rows * cols} PNL
+        </text>
+
+        {/* 나침반 */}
+        <circle cx={CX} cy={CY} r={CR}    fill="#0A1628" stroke="rgba(0,191,255,0.65)" strokeWidth={1} />
+        <circle cx={CX} cy={CY} r={CR - 5} fill="none"   stroke="rgba(0,191,255,0.2)"  strokeWidth={0.5} />
+        {/* 십자선 */}
+        <line x1={CX} y1={CY-CR+12} x2={CX} y2={CY+CR-12}
+              stroke="rgba(255,255,255,0.15)" strokeWidth={0.5} />
+        <line x1={CX-CR+12} y1={CY} x2={CX+CR-12} y2={CY}
+              stroke="rgba(255,255,255,0.15)" strokeWidth={0.5} />
+        <text x={CX}       y={CY-CR+11} textAnchor="middle" fontSize={8} fontWeight="700" fill="white"                    fontFamily="monospace">N</text>
+        <text x={CX}       y={CY+CR-3}  textAnchor="middle" fontSize={8} fontWeight="700" fill="#00BFFF"                  fontFamily="monospace">S</text>
+        <text x={CX+CR-4}  y={CY+3}     textAnchor="end"    fontSize={6.5}                fill="rgba(255,255,255,0.4)"    fontFamily="monospace">E</text>
+        <text x={CX-CR+4}  y={CY+3}     textAnchor="start"  fontSize={6.5}                fill="rgba(255,255,255,0.4)"    fontFamily="monospace">W</text>
+        {/* 남향 화살표 */}
+        <line x1={CX} y1={CY} x2={sx} y2={sy}
+              stroke="#00BFFF" strokeWidth={1.5} markerEnd="url(#arrowBP)" />
+        {/* 방위각 */}
+        <text x={CX} y={CY + CR + 13} textAnchor="middle" fontSize={8}
+              fill="rgba(0,191,255,0.8)" fontFamily="monospace">
+          {azimuth}°
+        </text>
+      </svg>
+    </div>
   );
 }
 
