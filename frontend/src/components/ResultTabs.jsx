@@ -237,6 +237,106 @@ function SectionHeader({ title, badge, right }) {
   );
 }
 
+// ── 2D 모듈 배치도 ────────────────────────────────────────────────────────────
+function PanelLayout2D({ panelLayout }) {
+  const rows        = panelLayout?.stats?.row_count    || 3;
+  const cols        = panelLayout?.stats?.col_count    || 4;
+  const activePanels = panelLayout?.stats?.active_panels ?? rows * cols;
+  const azimuth     = panelLayout?.stats?.azimuth_deg ?? 180;
+
+  // 패널 크기 자동 스케일 (최대 그리드 영역 300×220 px 기준)
+  const MAX_W = 300, MAX_H = 220;
+  const GAP_R = 0.18;           // gap = panel_size * GAP_R
+  const ASPECT = 22 / 34;      // panel width / height
+
+  const colUnits = cols + (cols - 1) * GAP_R;
+  const rowUnits = rows + (rows - 1) * GAP_R;
+  const pwByW    = MAX_W / colUnits;
+  const pwByH    = (MAX_H / rowUnits) * ASPECT;
+  const PW       = Math.max(4, Math.min(pwByW, pwByH, 30));
+  const PH       = PW / ASPECT;
+  const GX       = PW * GAP_R;
+  const GY       = PH * GAP_R;
+
+  const gridW = cols * PW + (cols - 1) * GX;
+  const gridH = rows * PH + (rows - 1) * GY;
+  const PAD   = 18;
+  const roofW = gridW + PAD * 2;
+  const roofH = gridH + PAD * 2;
+
+  // 나침반 위치 (지붕 오른쪽)
+  const CR = 32;
+  const CX = roofW + 14 + CR;
+  const CY = CR + 4;
+  const SVG_W = CX + CR + 6;
+  const SVG_H = roofH + 28;
+
+  // 남향 화살표 (azimuth=180 → 아래쪽)
+  const sRad = ((azimuth - 90) * Math.PI) / 180;
+  const sLen = CR - 8;
+  const sx   = CX + sLen * Math.cos(sRad);
+  const sy   = CY + sLen * Math.sin(sRad);
+
+  const panels = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const n      = r * cols + c + 1;
+      const active = n <= activePanels;
+      const x      = PAD + c * (PW + GX);
+      const y      = PAD + r * (PH + GY);
+      panels.push(
+        <g key={`p${r}-${c}`}>
+          <rect x={x} y={y} width={PW} height={PH} rx={1.5}
+                fill={active ? '#3182ce' : '#e2e8f0'}
+                stroke={active ? '#2b6cb0' : '#a0aec0'}
+                strokeWidth={0.7} />
+          {active && PW >= 12 && <>
+            <line x1={x+PW*.33} y1={y+1.5} x2={x+PW*.33} y2={y+PH-1.5} stroke="#bee3f8" strokeWidth={0.5}/>
+            <line x1={x+PW*.67} y1={y+1.5} x2={x+PW*.67} y2={y+PH-1.5} stroke="#bee3f8" strokeWidth={0.5}/>
+            <line x1={x+1.5} y1={y+PH*.5} x2={x+PW-1.5} y2={y+PH*.5}   stroke="#bee3f8" strokeWidth={0.5}/>
+          </>}
+        </g>
+      );
+    }
+  }
+
+  return (
+    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{ width: '100%', height: 'auto' }}>
+      <defs>
+        <marker id="arrowS2D" markerWidth={7} markerHeight={7} refX={5} refY={3.5} orient="auto">
+          <polygon points="0,0 7,3.5 0,7" fill="#e53e3e" />
+        </marker>
+      </defs>
+
+      {/* 지붕 외곽 */}
+      <rect x={0} y={0} width={roofW} height={roofH} rx={6}
+            fill="#edf2f7" stroke="#a0aec0" strokeWidth={1.5} />
+
+      {/* 패널 격자 */}
+      {panels}
+
+      {/* 하단 레이블 */}
+      <text x={roofW/2} y={roofH+18} textAnchor="middle" fontSize={10} fill="#718096">
+        {cols}열 × {rows}행 · 활성 {activePanels}매 / 전체 {rows*cols}매
+      </text>
+
+      {/* 나침반 원 */}
+      <circle cx={CX} cy={CY} r={CR} fill="white" stroke="#e2e8f0" strokeWidth={1} />
+      <text x={CX} y={CY-CR+12} textAnchor="middle" fontSize={9} fontWeight="700" fill="#718096">N</text>
+      <text x={CX} y={CY+CR-3}  textAnchor="middle" fontSize={9} fontWeight="700" fill="#e53e3e">S</text>
+      {/* 북쪽 기준선 */}
+      <line x1={CX} y1={CY} x2={CX} y2={CY-CR+14} stroke="#a0aec0" strokeWidth={1}/>
+      {/* 남향 방위각 화살표 */}
+      <line x1={CX} y1={CY} x2={sx} y2={sy}
+            stroke="#e53e3e" strokeWidth={2} markerEnd="url(#arrowS2D)" />
+      {/* 방위각 수치 */}
+      <text x={CX} y={CY+CR+15} textAnchor="middle" fontSize={10} fill="#4a5568">
+        {azimuth}°
+      </text>
+    </svg>
+  );
+}
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export default function ResultTabs({ result, markerPos, buildingPolygon, onMapClick, onReset,
                                     activeTab: externalTab, onTabChange }) {
@@ -521,6 +621,16 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
             {/* 건물 정보 + 시스템 구성 (BuildingInfo에 두 카드 포함) — 전체 너비 */}
             <BuildingInfo building={building} system={system} />
 
+            {/* 2D 모듈 배치도 */}
+            {panel_layout && (
+              <div className="card card-accent">
+                <SectionHeader title="🔲 2D 모듈 배치도" badge="자동 생성" />
+                <div style={{ padding: '12px 24px 20px' }}>
+                  <PanelLayout2D panelLayout={panel_layout} />
+                </div>
+              </div>
+            )}
+
             {/* 배치 상세 — 전체 너비 카드 */}
             <div className="card card-accent">
               <SectionHeader title="📐 배치 상세" />
@@ -662,40 +772,6 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                       </div>
                     </div>
                   )}
-
-                  {/* 토지 특성 */}
-                  <div className="card card-accent">
-                    <SectionHeader title="🌱 토지 특성" />
-                    <div style={{ padding: '0 24px 16px' }}>
-                      {[
-                        { label: 'PNU', value: reg.pnu || '정보 없음', cls: '' },
-                        { label: '농지 여부', value: reg.isFarmland ? '농지 (전용허가 필요)' : '해당없음', cls: reg.isFarmland ? 'orange' : '' },
-                        { label: '임야 여부', value: reg.isForest   ? '임야 (전용허가 필요)' : '해당없음', cls: reg.isForest   ? 'orange' : '' },
-                      ].map((row, i) => (
-                        <div className="info-row" key={i}>
-                          <span className="info-row-label">{row.label}</span>
-                          <span className={`info-row-value ${row.cls || ''}`} style={{ fontSize: 13 }}>{row.value}</span>
-                        </div>
-                      ))}
-                      {[
-                        { label: '지목',     raw: reg.landCategory },
-                        { label: '이용현황', raw: reg.landUseStatus },
-                        { label: '지형고저', raw: reg.terrain },
-                      ].map((row, i) => {
-                        const empty = !row.raw || row.raw === '-';
-                        return (
-                          <div className="info-row" key={`land${i}`}>
-                            <span className="info-row-label">{row.label}</span>
-                            <span className="info-row-value" style={{ fontSize: 13 }}>
-                              {empty
-                                ? <span style={{ color: '#888' }}>정보 없음&nbsp;<a href="https://map.vworld.kr/map/maps.do" target="_blank" rel="noopener noreferrer" style={{ color: '#2b6cb0' }}>직접 조회</a></span>
-                                : row.raw}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
 
                   {/* 개발행위허가 검토 */}
                   <div className="card card-accent">
