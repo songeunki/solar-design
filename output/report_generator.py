@@ -287,11 +287,12 @@ def _calc_economics(e: ElectricalDesign) -> dict:
     from analyzer.smp_api import get_smp_price
     fin = get_admin_finance()
     cost_per_kw = fin["cost_per_kw"] * 10_000  # 만원 → 원
-    smp           = get_smp_price()
-    elec_price    = smp["price"]
-    smp_date      = smp["date"]
-    smp_source    = smp["source"]
-    smp_raw_count = smp.get("raw_count")
+    smp            = get_smp_price()
+    elec_price     = smp["price"]
+    smp_date       = smp["date"]
+    smp_source     = smp["source"]
+    smp_sample_cnt = smp.get("sample_count")
+    smp_hours_used = smp.get("hours_used")
 
     total_cost  = e.total_capacity_kw * cost_per_kw
     annual_save = e.annual_generation_kwh * elec_price
@@ -307,7 +308,8 @@ def _calc_economics(e: ElectricalDesign) -> dict:
         "smp_price":        elec_price,
         "smp_date":         smp_date,
         "smp_source":       smp_source,
-        "smp_raw_count":    smp_raw_count,
+        "smp_sample_cnt":   smp_sample_cnt,
+        "smp_hours_used":   smp_hours_used,
     }
 
 
@@ -796,12 +798,13 @@ def _render_html(s: dict, map_b64: str | None = None, panel_layout: dict | None 
     _smp_price  = ec.get("smp_price", 150)
     _smp_source = ec.get("smp_source", "관리자 설정 기준")
     _smp_date   = ec.get("smp_date")
-    _smp_count  = ec.get("smp_raw_count")
+    _smp_cnt    = ec.get("smp_sample_cnt")
+    _smp_hours  = ec.get("smp_hours_used", "")
     if _smp_date:
-        _count_txt  = f" ({_smp_count}개 시간대 평균)" if _smp_count else ""
-        _smp_label  = f"{_smp_source} {_smp_date}{_count_txt}"
+        _detail    = f"{_smp_hours} {_smp_cnt}개" if (_smp_hours and _smp_cnt) else ""
+        _smp_label = f"{_smp_source} {_smp_date}" + (f" · {_detail}" if _detail else "")
     else:
-        _smp_label  = _smp_source
+        _smp_label = _smp_source
     ec_note = (
         '<div style="margin-top:16px;padding:12px 16px;background:#f8faff;'
         'border-radius:8px;font-size:12px;color:#718096;border:1px solid #e2e8f0">'
