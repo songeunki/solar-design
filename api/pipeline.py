@@ -83,6 +83,24 @@ def run_pipeline(
         if raw_polygon else None
     )
 
+    # polygon 실측 면적 계산
+    from analyzer.area_calculator import calculate_polygon_area
+    _area_calc = (
+        calculate_polygon_area(roof_polygon_dicts)
+        if roof_polygon_dicts
+        else {"valid": False, "error": "polygon 없음"}
+    )
+    if _area_calc["valid"]:
+        polygon_area_m2 = _area_calc["area_m2"]
+        area_used_m2    = polygon_area_m2
+        area_source     = "polygon"
+        area_warning    = None
+    else:
+        polygon_area_m2 = None
+        area_used_m2    = arch_area_m2 or building.roof_area_m2 or 0
+        area_source     = "archArea"
+        area_warning    = _area_calc.get("error", "polygon 면적 계산 실패")
+
     # [DEBUG] 방위각 진단 로그
     print(f"[AZIMUTH_DEBUG] address={address!r}")
     print(f"[AZIMUTH_DEBUG] roof.azimuth_deg={roof.azimuth_deg}  effective={effective_azimuth}  source={azimuth_source}")
@@ -162,6 +180,10 @@ def run_pipeline(
             "purpose":       building.extra.get("purpose", ""),
             "irradiation":   round(sum(weather.monthly_irradiance), 1),
             "polygon":       building.extra.get("osm_polygon"),  # [[lon, lat], ...] or None
+            "polygonArea":   polygon_area_m2,
+            "areaUsed":      round(area_used_m2, 1),
+            "areaSource":    area_source,
+            "areaWarning":   area_warning,
         },
         "system": {
             "panelCount":   electrical.panel_count,
