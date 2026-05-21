@@ -178,6 +178,9 @@ def run_pipeline(
             "recRevenue":    rec_revenue,
             "paybackYear":   payback_year,
             "netProfit20y":  net_profit_20y,
+            "smpPrice":      ec.get("smp_price"),
+            "smpDate":       ec.get("smp_date"),
+            "smpSource":     ec.get("smp_source"),
         },
         "monthly_data": [
             {
