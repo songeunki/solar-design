@@ -286,8 +286,11 @@ def _calc_economics(e: ElectricalDesign) -> dict:
     from config import get_admin_finance
     from analyzer.smp_api import get_smp_price
     fin = get_admin_finance()
-    cost_per_kw               = fin["cost_per_kw"] * 10_000  # 만원 → 원
-    elec_price, smp_date, smp_source = get_smp_price()
+    cost_per_kw = fin["cost_per_kw"] * 10_000  # 만원 → 원
+    smp         = get_smp_price()
+    elec_price  = smp["price"]
+    smp_date    = smp["date"]
+    smp_source  = smp["source"]
 
     total_cost  = e.total_capacity_kw * cost_per_kw
     annual_save = e.annual_generation_kwh * elec_price
@@ -789,8 +792,9 @@ def _render_html(s: dict, map_b64: str | None = None, panel_layout: dict | None 
         row("연간 CO₂ 저감량", f"{ec['연간CO2저감_kg']:,} kg-CO₂ / 년", "#2ecc71")
     )
     _smp_price  = ec.get("smp_price", 150)
-    _smp_source = ec.get("smp_source", "admin")
-    _smp_label  = f"SMP {ec.get('smp_date', '')} 기준" if _smp_source == "smp" else "관리자 설정 기준"
+    _smp_source = ec.get("smp_source", "관리자 설정 기준")
+    _smp_date   = ec.get("smp_date")
+    _smp_label  = f"{_smp_source} {_smp_date}" if _smp_date else _smp_source
     ec_note = (
         '<div style="margin-top:16px;padding:12px 16px;background:#f8faff;'
         'border-radius:8px;font-size:12px;color:#718096;border:1px solid #e2e8f0">'
