@@ -2,17 +2,29 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
+import requests as _req
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 from api.pipeline import run_pipeline
 
-_LOG_FILE = pathlib.Path(__file__).parent.parent.parent / "analysis_log.json"
+_GH_REPO = "songeunki/solar-design"
+_GH_PATH = "data/analysis_log.json"
+_GH_API  = f"https://api.github.com/repos/{_GH_REPO}/contents/{_GH_PATH}"
+
+
+def _gh_headers() -> dict:
+    token = os.environ.get("GITHUB_TOKEN", "")
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
 
 
 def _get_client_ip(websocket: WebSocket) -> str:
@@ -23,6 +35,9 @@ def _get_client_ip(websocket: WebSocket) -> str:
 
 
 def _append_log(address: str, result: dict, ip: str = "unknown") -> None:
+    if not os.environ.get("GITHUB_TOKEN"):
+        return
+
     entry = {
         "timestamp":   datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S"),
         "ip":          ip,
@@ -32,14 +47,38 @@ def _append_log(address: str, result: dict, ip: str = "unknown") -> None:
         "roi_years":   result.get("financial", {}).get("paybackYear", 0),
         "azimuth_deg": result.get("building", {}).get("azimuth", 180),
     }
+
+    headers = _gh_headers()
+    sha: str | None = None
     logs: list = []
-    if _LOG_FILE.exists():
-        try:
-            logs = json.loads(_LOG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+
+    # 1. 현재 파일 조회
+    try:
+        r = _req.get(_GH_API, headers=headers, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            sha = data["sha"]
+            logs = json.loads(base64.b64decode(data["content"]).decode("utf-8"))
+    except Exception:
+        pass
+
+    # 2. 새 항목 추가 후 PUT
     logs.append(entry)
-    _LOG_FILE.write_text(json.dumps(logs, ensure_ascii=False, indent=2), encoding="utf-8")
+    new_content = base64.b64encode(
+        json.dumps(logs, ensure_ascii=False, indent=2).encode("utf-8")
+    ).decode("ascii")
+
+    body: dict = {
+        "message": f"log: {address} ({entry['timestamp']})",
+        "content": new_content,
+    }
+    if sha:
+        body["sha"] = sha
+
+    try:
+        _req.put(_GH_API, headers=headers, json=body, timeout=15)
+    except Exception:
+        pass
 
 router = APIRouter(tags=["analyze"])
 
