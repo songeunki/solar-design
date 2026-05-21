@@ -1,10 +1,11 @@
-"""공공데이터포털 KPX SMP 단가 조회 (공식 API 2단계 fallback).
+"""공공데이터포털 KPX SMP 단가 조회.
 
-1차: 한국전력거래소_계통한계가격 및 수요예측(하루전 발전계획용)
-     endpoint: getElSmpFrcst
-2차: 한국전력거래소_계통한계가격(SMP) 실시간 조회
-     endpoint: getElSmpInvtList
-3차: admin_config revenue_per_kwh (기본 150원)
+API: 한국전력거래소_계통한계가격 및 수요예측
+endpoint: https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemand
+
+# 예시 호출:
+# curl "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemand?
+#   serviceKey=XXX&pageNo=1&numOfRows=50&dataType=json&date=20260521"
 
 환경변수 KPX_API_KEY: 공공데이터포털(data.go.kr) 발급 인증키.
 """
@@ -12,81 +13,119 @@ from __future__ import annotations
 import os
 from datetime import date, timedelta
 
-_BASE = "https://apis.data.go.kr/B551182"
+_URL = "https://apis.data.go.kr/B552115/SmpWithForecastDemand/getSmpWithForecastDemand"
 
-# 1차: 계통한계가격 및 수요예측 (하루전 발전계획용)
-_PRIMARY_URL  = f"{_BASE}/kpxElfnSmpFrcst/getElSmpFrcst"
-# 2차: 계통한계가격 실시간 조회
-_FALLBACK_URL = f"{_BASE}/kpxElfnSmpInvtList/getElSmpInvtList"
+# 태양광 발전 시간대 (09~17시) — 이 범위만 평균 산정
+# 향후 정책 변경 시 이 상수만 수정
+_GEN_HOURS: frozenset[int] = frozenset(range(9, 18))  # 9, 10, ..., 17
 
 
-def _extract_item(items) -> tuple[float, str] | None:
-    """items(list or dict)에서 (price, YYYY-MM-DD) 추출. 실패 시 None."""
-    item = items[0] if isinstance(items, list) else items
-    price = 0.0
-    for key in ("smp", "avgSmp", "cpSmp"):
-        raw = item.get(key)
-        if raw not in (None, "", "-"):
-            try:
-                price = float(raw)
-                break
-            except (ValueError, TypeError):
-                pass
-    if price <= 0:
+def _parse_hour(raw: object) -> int | None:
+    """API 시간 필드 → 정수 시(0~23).
+
+    지원 형식: 1~24, "01"~"24", "0100"~"2400"
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    try:
+        h = int(s[:2]) if len(s) >= 4 else int(s)
+        if h > 24:               # 잘못된 값(예: "900" → 900) 거부
+            return None
+        return h % 24            # 24 → 0 (자정)
+    except (ValueError, TypeError):
         return None
 
-    raw_date = str(item.get("tradeDate") or item.get("baseDatetime") or "")
-    if len(raw_date) >= 8:
-        d = raw_date[:8]
-        trade_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
-    else:
-        trade_date = date.today().isoformat()
-    return price, trade_date
 
+def _fetch(api_key: str, query_date: str) -> dict | None:
+    """API 호출 → 육지 발전시간대 SMP 평균 반환. 실패 또는 데이터 없으면 None.
 
-def _call(url: str, api_key: str, base_date: str) -> tuple[float, str] | None:
-    """API 호출 → (price, date) 반환. 실패 시 None."""
+    Args:
+        query_date: YYYYMMDD 형식 날짜 문자열
+
+    Returns:
+        {"price": float, "date": "YYYY-MM-DD", "raw_count": int} or None
+    """
     import requests
-    params = {
-        "serviceKey": api_key,
-        "pageNo":     1,
-        "numOfRows":  1,
-        "dataType":   "json",
-        "recvKwh":    "A",           # 육지 (제주: B)
-        "baseDatetime": base_date,   # YYYYMMDD
-    }
-    resp = requests.get(url, params=params, timeout=6)
+
+    resp = requests.get(
+        _URL,
+        params={
+            "serviceKey": api_key,
+            "pageNo":     1,
+            "numOfRows":  50,   # 24시간 × 2지역(육지+제주) 충분히 커버
+            "dataType":   "json",
+            "date":       query_date,
+        },
+        timeout=8,
+    )
     resp.raise_for_status()
-    body  = resp.json().get("response", {}).get("body", {})
-    items = body.get("items", {})
+
+    body = resp.json().get("response", {})
+    if body.get("header", {}).get("resultCode") != "00":
+        return None
+
+    items = body.get("body", {}).get("items", {})
     if isinstance(items, dict):
         items = items.get("item", [])
     if not items:
         return None
-    return _extract_item(items)
+
+    prices: list[float] = []
+    for item in (items if isinstance(items, list) else [items]):
+        if str(item.get("areaName", "")).strip() != "육지":
+            continue
+        hour = _parse_hour(item.get("time") or item.get("hour") or item.get("baseTime"))
+        if hour not in _GEN_HOURS:
+            continue
+        raw_smp = item.get("smp")
+        if raw_smp in (None, "", "-"):
+            continue
+        try:
+            prices.append(float(raw_smp))
+        except (ValueError, TypeError):
+            pass
+
+    if not prices:
+        return None
+
+    avg = round(sum(prices) / len(prices), 2)
+    d   = query_date
+    return {
+        "price":     avg,
+        "date":      f"{d[:4]}-{d[4:6]}-{d[6:]}",
+        "raw_count": len(prices),
+    }
 
 
 def get_smp_price() -> dict:
-    """SMP 단가 조회.
+    """SMP 단가 조회 (발전 시간대 09~17시 육지 평균).
+
+    날짜 재시도: 오늘 → 어제 → 그제 순서
+    (당일 데이터는 당일 24시 이후 공시되므로 전일 데이터가 일반적)
 
     Returns:
-        성공: {"price": float, "date": "YYYY-MM-DD", "source": "KPX 실시간"}
-        실패: {"price": float, "date": None,          "source": "관리자 설정 기준"}
+        성공: {"price": float, "date": "YYYY-MM-DD",
+               "source": "KPX 실시간", "raw_count": int}
+        실패: {"price": float, "date": None,
+               "source": "관리자 설정 기준"}
     """
     api_key = os.environ.get("KPX_API_KEY", "")
 
     if api_key:
-        # 오늘 데이터 없으면 전일로 재시도 (당일 SMP는 늦게 공시될 수 있음)
-        for days_ago in (0, 1):
-            base_date = (date.today() - timedelta(days=days_ago)).strftime("%Y%m%d")
-            for url in (_PRIMARY_URL, _FALLBACK_URL):
-                try:
-                    result = _call(url, api_key, base_date)
-                    if result:
-                        price, trade_date = result
-                        return {"price": price, "date": trade_date, "source": "KPX 실시간"}
-                except Exception:
-                    continue
+        for days_ago in (0, 1, 2):
+            query_date = (date.today() - timedelta(days=days_ago)).strftime("%Y%m%d")
+            try:
+                result = _fetch(api_key, query_date)
+                if result:
+                    return {
+                        "price":     result["price"],
+                        "date":      result["date"],
+                        "source":    "KPX 실시간",
+                        "raw_count": result["raw_count"],
+                    }
+            except Exception:
+                continue
 
     from config import get_admin_finance
     fin = get_admin_finance()

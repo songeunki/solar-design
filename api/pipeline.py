@@ -181,6 +181,7 @@ def run_pipeline(
             "smpPrice":      ec.get("smp_price"),
             "smpDate":       ec.get("smp_date"),
             "smpSource":     ec.get("smp_source"),
+            "smpRawCount":   ec.get("smp_raw_count"),
         },
         "monthly_data": [
             {
