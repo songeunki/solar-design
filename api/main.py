@@ -37,6 +37,13 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/test/smp")
+def test_smp():
+    """SMP 단가 조회 임시 테스트 엔드포인트."""
+    from analyzer.smp_api import get_smp_price
+    return get_smp_price()
+
+
 # ── 프론트엔드 정적 파일 서빙 (빌드된 경우에만) ──────────────────────────────
 _FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
 
