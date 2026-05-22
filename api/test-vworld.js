@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     results.wfs_lp_pa_cbnd = {
       http:         r.status,
       feature_cnt:  parsed?.features?.length ?? null,
-      body_preview: body.slice(0, 300),
+      body_preview: body.slice(0, 600),
     };
   } catch (e) {
     results.wfs_lp_pa_cbnd = { error: e.message };
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
     results.wfs_lt_c_bldginfo = {
       http:         r.status,
       feature_cnt:  parsed?.features?.length ?? null,
-      body_preview: body.slice(0, 300),
+      body_preview: body.slice(0, 600),
     };
   } catch (e) {
     results.wfs_lt_c_bldginfo = { error: e.message };
