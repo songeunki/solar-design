@@ -228,43 +228,46 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
 
     # Step 5: V-World WFS + OSM Overpass (면적 + 방위각 + EW/NS 치수)
     if loc:
-        # V-World WFS — raw 응답 진단 포함
+        # V-World 엔드포인트 접근성 진단 (WFS / Data API)
         try:
             import requests as _req
             from config import VWORLD_API_KEY
             _bbox_deg = 0.0005
+            _pt = f"POINT({loc.lng} {loc.lat})"
             _bbox = (
-                f"{loc.lng - _bbox_deg},{loc.lat - _bbox_deg},"
-                f"{loc.lng + _bbox_deg},{loc.lat + _bbox_deg}"
+                f"{loc.lng-_bbox_deg},{loc.lat-_bbox_deg},"
+                f"{loc.lng+_bbox_deg},{loc.lat+_bbox_deg}"
             )
             _vw_raw: dict = {}
-            for _typename in ("lp_pa_cbnd_bubun", "lt_c_bldginfo"):
-                _r = _req.get(
-                    "https://api.vworld.kr/req/wfs",
-                    params={
-                        "KEY": VWORLD_API_KEY, "SERVICE": "WFS",
-                        "REQUEST": "GetFeature", "TYPENAME": _typename,
-                        "BBOX": _bbox, "SRSNAME": "EPSG:4326",
-                        "OUTPUTFORMAT": "application/json", "MAXFEATURES": 5,
-                    },
-                    timeout=10,
-                )
-                _vw_raw[_typename] = {
-                    "http_status": _r.status_code,
-                    "body_preview": _r.text[:500],
-                }
 
-            from data_collector.vworld_polygon import get_building_polygon
-            vw_area, vw_az, vw_ew, vw_ns, vw_poly = get_building_polygon(loc.lat, loc.lng)
+            # (A) WFS
+            try:
+                _r = _req.get("https://api.vworld.kr/req/wfs", params={
+                    "KEY": VWORLD_API_KEY, "SERVICE": "WFS",
+                    "REQUEST": "GetFeature", "TYPENAME": "lp_pa_cbnd_bubun",
+                    "BBOX": _bbox, "SRSNAME": "EPSG:4326",
+                    "OUTPUTFORMAT": "application/json", "MAXFEATURES": 3,
+                }, timeout=8)
+                _vw_raw["wfs"] = {"http": _r.status_code, "body": _r.text[:400]}
+            except Exception as _e:
+                _vw_raw["wfs"] = {"error": str(_e)}
+
+            # (B) Data API (POINT 기반)
+            for _layer in ("LP_PA_CBND_BUBUN", "LT_C_BLDGINFO"):
+                try:
+                    _r2 = _req.get("https://api.vworld.kr/req/data", params={
+                        "key": VWORLD_API_KEY, "service": "data",
+                        "request": "GetFeature", "data": _layer,
+                        "geomFilter": _pt, "format": "json", "size": 3,
+                    }, timeout=8)
+                    _vw_raw[f"data_{_layer}"] = {"http": _r2.status_code, "body": _r2.text[:400]}
+                except Exception as _e:
+                    _vw_raw[f"data_{_layer}"] = {"error": str(_e)}
+
             result["steps"]["vworld_wfs"] = {
-                "status":        "ok" if vw_poly else "no_data",
-                "area_m2":       vw_area,
-                "azimuth_deg":   vw_az,
-                "building_ew_m": vw_ew,
-                "building_ns_m": vw_ns,
-                "polygon_pts":   len(vw_poly) if vw_poly else 0,
-                "raw_responses": _vw_raw,
-                "key_set":       bool(VWORLD_API_KEY),
+                "status":   "diagnostic",
+                "key_set":  bool(VWORLD_API_KEY),
+                "raw":      _vw_raw,
             }
         except Exception as e:
             result["steps"]["vworld_wfs"] = {"status": "error", "error": str(e)}
