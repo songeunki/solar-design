@@ -568,6 +568,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                     value: building.purpose || '-' },
                   { label: '건축면적',
                     value: building.archArea ? `${building.archArea.toLocaleString()} m²` : '-' },
+                  ...(building.areaSource === 'polygon' && building.polygonArea && building.archArea &&
+                      Math.abs(building.polygonArea - building.archArea) / building.archArea >= 0.05
+                    ? [{ label: '옥상 실측 면적', value: `${building.polygonArea.toFixed(1)} m²`, sub: 'V-World 지적도 기반' }]
+                    : []),
                   { label: '연간 일사량',
                     value: building.irradiation ? `${building.irradiation} kWh/m²` : '-',
                     cls: 'orange' },
@@ -582,7 +586,10 @@ export default function ResultTabs({ result, markerPos, buildingPolygon, onMapCl
                 ].map((row, i) => (
                   <div className="info-row" key={i}>
                     <span className="info-row-label">{row.label}</span>
-                    <span className={`info-row-value ${row.cls || ''}`}>{row.value}</span>
+                    <span className={`info-row-value ${row.cls || ''}`}>
+                      {row.value}
+                      {row.sub && <span style={{fontSize:11,color:'#a0aec0',marginLeft:5}}>{row.sub}</span>}
+                    </span>
                   </div>
                 ))}
               </div>
