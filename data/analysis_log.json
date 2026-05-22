@@ -106,5 +106,14 @@
     "annual_kwh": 33660,
     "roi_years": 8.6,
     "azimuth_deg": 170.1
+  },
+  {
+    "timestamp": "2026-05-22 16:41:54",
+    "ip": "1.223.240.125",
+    "address": "부산광역시 강서구 공항로1207번길 26",
+    "capacity_kw": 7.68,
+    "annual_kwh": 10108,
+    "roi_years": 8.6,
+    "azimuth_deg": 184.7
   }
 ]
