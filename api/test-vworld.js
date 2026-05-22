@@ -7,8 +7,16 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const apiKey = process.env.VWORLD_API_KEY || '';
-  // 환경변수 디버그: VWORLD 관련 키 이름 목록 (값 제외)
   const envKeys = Object.keys(process.env).filter(k => k.includes('VWORLD') || k.includes('vworld'));
+  // ?debug_all=1 → 모든 env key 이름 덤프 (값 제외, 진단용)
+  if (req.query.debug_all === '1') {
+    return res.status(200).json({
+      all_env_keys: Object.keys(process.env).sort(),
+      vworld_keys: envKeys,
+      vercel_env: process.env.VERCEL_ENV || 'unknown',
+      vworld_api_key_set: !!apiKey,
+    });
+  }
   if (!apiKey) {
     return res.status(500).json({
       error: 'VWORLD_API_KEY 환경변수 미설정',
