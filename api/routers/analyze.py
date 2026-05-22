@@ -228,8 +228,32 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
 
     # Step 5: V-World WFS + OSM Overpass (면적 + 방위각 + EW/NS 치수)
     if loc:
-        # V-World WFS
+        # V-World WFS — raw 응답 진단 포함
         try:
+            import requests as _req
+            from config import VWORLD_API_KEY
+            _bbox_deg = 0.0005
+            _bbox = (
+                f"{loc.lng - _bbox_deg},{loc.lat - _bbox_deg},"
+                f"{loc.lng + _bbox_deg},{loc.lat + _bbox_deg}"
+            )
+            _vw_raw: dict = {}
+            for _typename in ("lp_pa_cbnd_bubun", "lt_c_bldginfo"):
+                _r = _req.get(
+                    "https://api.vworld.kr/req/wfs",
+                    params={
+                        "KEY": VWORLD_API_KEY, "SERVICE": "WFS",
+                        "REQUEST": "GetFeature", "TYPENAME": _typename,
+                        "BBOX": _bbox, "SRSNAME": "EPSG:4326",
+                        "OUTPUTFORMAT": "application/json", "MAXFEATURES": 5,
+                    },
+                    timeout=10,
+                )
+                _vw_raw[_typename] = {
+                    "http_status": _r.status_code,
+                    "body_preview": _r.text[:500],
+                }
+
             from data_collector.vworld_polygon import get_building_polygon
             vw_area, vw_az, vw_ew, vw_ns, vw_poly = get_building_polygon(loc.lat, loc.lng)
             result["steps"]["vworld_wfs"] = {
@@ -239,6 +263,8 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
                 "building_ew_m": vw_ew,
                 "building_ns_m": vw_ns,
                 "polygon_pts":   len(vw_poly) if vw_poly else 0,
+                "raw_responses": _vw_raw,
+                "key_set":       bool(VWORLD_API_KEY),
             }
         except Exception as e:
             result["steps"]["vworld_wfs"] = {"status": "error", "error": str(e)}
