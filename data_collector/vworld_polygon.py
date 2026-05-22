@@ -1,34 +1,29 @@
-"""V-World WFS API로 건물 footprint polygon 조회.
+"""V-World WFS polygon 조회 — Vercel 프록시 경유.
 
-엔드포인트: https://api.vworld.kr/req/wfs
-레이어 시도 순서:
-  1) lp_pa_cbnd_bubun  — 건물 부분경계 (더 정밀)
-  2) lt_c_bldginfo     — 건물 정보
+Vercel icn1의 /api/vworld-polygon 프록시가 V-World WFS를 호출하고
+GeoJSON을 반환한다. Render 서버는 직접 V-World를 호출하지 않는다.
 
-환경변수 VWORLD_API_KEY: 주소 좌표 조회와 동일한 키 사용.
+프록시 URL: VWORLD_PROXY_URL 환경변수 (기본값 하드코딩)
 """
 from __future__ import annotations
 import logging
 import math
+import os
 
 import requests
 
 logger = logging.getLogger(__name__)
 
-_WFS_URL   = "https://api.vworld.kr/req/wfs"
-_BBOX_DEG  = 0.0005          # ≈ 55m — 단일 건물 조회에 충분
+_PROXY_URL = os.environ.get(
+    "VWORLD_PROXY_URL",
+    "https://solar-design-opal.vercel.app/api/vworld-polygon",
+)
 _M_PER_DEG = 111_320
-
-_LAYERS = [
-    "lp_pa_cbnd_bubun",  # 건물 부분경계 (GIS 기반)
-    "lt_c_bldginfo",     # 건물 정보 (속성 + 형상)
-]
 
 
 # ── 내부 헬퍼 ────────────────────────────────────────────────────────────────
 
 def _centroid(feature: dict) -> tuple[float, float]:
-    """Feature 외곽 링의 무게중심 (lon, lat) 반환."""
     try:
         raw  = feature["geometry"]["coordinates"]
         ring = raw[0] if isinstance(raw[0][0], (list, tuple)) else raw
@@ -40,7 +35,6 @@ def _centroid(feature: dict) -> tuple[float, float]:
 
 
 def _closest_feature(features: list[dict], lat: float, lng: float) -> dict | None:
-    """조회 좌표에 무게중심이 가장 가까운 feature 반환."""
     if not features:
         return None
     return min(
@@ -53,16 +47,14 @@ def _closest_feature(features: list[dict], lat: float, lng: float) -> dict | Non
 
 
 def _to_coords(feature: dict) -> list[tuple[float, float]] | None:
-    """GeoJSON feature → [(lon, lat), ...] 외곽 링 좌표. 실패 시 None."""
     try:
-        geom = feature["geometry"]
+        geom  = feature["geometry"]
         gtype = geom.get("type", "")
         raw   = geom["coordinates"]
 
         if gtype == "Polygon":
             ring = raw[0]
         elif gtype == "MultiPolygon":
-            # 좌표 수가 가장 많은 외곽 링 선택
             ring = max((part[0] for part in raw if part), key=len)
         else:
             return None
@@ -74,89 +66,70 @@ def _to_coords(feature: dict) -> list[tuple[float, float]] | None:
         return None
 
 
+def _metrics_from_coords(
+    coords: list[tuple[float, float]],
+) -> tuple[float | None, float, float, float]:
+    """coords → (area_m2, azimuth_deg, ew_m, ns_m)."""
+    from data_collector.building_api import _polygon_area_m2, _azimuth_from_polygon
+    lons = [c[0] for c in coords]
+    lats = [c[1] for c in coords]
+    lat0 = sum(lats) / len(lats)
+    area    = _polygon_area_m2(coords)
+    ew_m    = round((max(lons) - min(lons)) * _M_PER_DEG * math.cos(math.radians(lat0)), 1)
+    ns_m    = round((max(lats) - min(lats)) * _M_PER_DEG, 1)
+    azimuth = _azimuth_from_polygon(coords)
+    return area, azimuth, ew_m, ns_m
+
+
 # ── 공개 API ─────────────────────────────────────────────────────────────────
 
 def get_building_polygon(
     lat: float,
     lng: float,
-    api_key: str = "",
+    api_key: str = "",          # 프록시 방식에서는 미사용 (하위 호환 유지)
 ) -> tuple[float | None, float | None, float | None, float | None, list | None]:
-    """V-World WFS로 건물 footprint polygon 조회.
-
-    Args:
-        lat, lng: 건물 내부 위경도
-        api_key: VWORLD_API_KEY. 빈 문자열이면 config에서 자동 로드.
+    """Vercel 프록시 경유로 건물 footprint polygon 조회.
 
     Returns:
         (area_m2|None, azimuth_deg|None, ew_m|None, ns_m|None, coords|None)
-        coords: [(lon, lat), ...] — OSM _building_info_from_osm 반환 형식 호환
-        모두 None이면 조회 실패 (caller가 OSM fallback 처리)
+        coords: [(lon, lat), ...]  — OSM fallback 형식과 동일
+        모두 None이면 조회 실패 → caller가 OSM fallback 처리
     """
-    if not api_key:
-        from config import VWORLD_API_KEY
-        api_key = VWORLD_API_KEY
-
-    if not api_key:
-        logger.debug("VWORLD_API_KEY 미설정 — V-World WFS 건너뜀")
+    try:
+        resp = requests.get(
+            _PROXY_URL,
+            params={"lat": lat, "lng": lng, "layer": "both"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        logger.warning("V-World 프록시 호출 실패: %s", exc)
         return None, None, None, None, None
 
-    bbox = (
-        f"{lng - _BBOX_DEG},{lat - _BBOX_DEG},"
-        f"{lng + _BBOX_DEG},{lat + _BBOX_DEG}"
-    )
+    if not data.get("success"):
+        logger.debug("V-World 프록시 실패 응답: %s", data.get("error"))
+        return None, None, None, None, None
 
-    for typename in _LAYERS:
-        try:
-            resp = requests.get(
-                _WFS_URL,
-                params={
-                    "KEY":          api_key,
-                    "SERVICE":      "WFS",
-                    "REQUEST":      "GetFeature",
-                    "TYPENAME":     typename,
-                    "BBOX":         bbox,
-                    "SRSNAME":      "EPSG:4326",
-                    "OUTPUTFORMAT": "application/json",
-                    "MAXFEATURES":  10,
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-
-            data = resp.json()
-            features = data.get("features", [])
-            if not features:
-                logger.debug("V-World WFS %s: features 없음", typename)
-                continue
-
-            feature = _closest_feature(features, lat, lng)
-            if feature is None:
-                continue
-
-            coords = _to_coords(feature)
-            if not coords or len(coords) < 3:
-                logger.debug("V-World WFS %s: coords %s개 부족", typename, len(coords or []))
-                continue
-
-            # 면적 + 바운딩박스 + 방위각 계산
-            from data_collector.building_api import _polygon_area_m2, _azimuth_from_polygon
-            area  = _polygon_area_m2(coords)
-            lons_ = [c[0] for c in coords]
-            lats_ = [c[1] for c in coords]
-            lat0  = sum(lats_) / len(lats_)
-            ew_m  = round((max(lons_) - min(lons_)) * _M_PER_DEG * math.cos(math.radians(lat0)), 1)
-            ns_m  = round((max(lats_) - min(lats_)) * _M_PER_DEG, 1)
-            azimuth = _azimuth_from_polygon(coords)
-
-            logger.info(
-                "V-World WFS %s: %d pts  area=%.1f㎡  az=%.1f°  EW=%.1fm  NS=%.1fm",
-                typename, len(coords), area or 0, azimuth, ew_m, ns_m,
-            )
-            return (round(area, 1) if area and area > 5 else None), azimuth, ew_m, ns_m, coords
-
-        except Exception as exc:
-            logger.warning("V-World WFS 오류 (layer=%s): %s", typename, exc)
+    # cbnd 우선, 없으면 building 레이어
+    for key in ("cbnd", "building"):
+        layer = data.get(key)
+        if not layer:
+            continue
+        features = layer.get("features", [])
+        feature  = _closest_feature(features, lat, lng)
+        if feature is None:
+            continue
+        coords = _to_coords(feature)
+        if not coords or len(coords) < 3:
             continue
 
-    logger.debug("V-World WFS: 모든 레이어 실패 lat=%.6f lng=%.6f", lat, lng)
+        area, azimuth, ew_m, ns_m = _metrics_from_coords(coords)
+        logger.info(
+            "V-World 프록시 [%s]: %d pts  area=%.1f㎡  az=%.1f°  EW=%.1fm  NS=%.1fm",
+            key, len(coords), area or 0, azimuth, ew_m, ns_m,
+        )
+        return (round(area, 1) if area and area > 5 else None), azimuth, ew_m, ns_m, coords
+
+    logger.debug("V-World 프록시: features 없음 lat=%.6f lng=%.6f", lat, lng)
     return None, None, None, None, None
