@@ -3,6 +3,12 @@
 
 export const config = { regions: ['icn1'] };
 
+const VWORLD_HEADERS = {
+  'Referer':    'https://solar-design-opal.vercel.app/',
+  'Origin':     'https://solar-design-opal.vercel.app',
+  'User-Agent': 'Mozilla/5.0 (compatible; SolarDesign-Vercel/1.0)',
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -44,14 +50,18 @@ export default async function handler(req, res) {
     url.searchParams.set('OUTPUTFORMAT', 'application/json');
     url.searchParams.set('MAXFEATURES',  '3');
 
-    const r = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+    const r = await fetch(url.toString(), {
+      headers: VWORLD_HEADERS,
+      signal: AbortSignal.timeout(8000),
+    });
     const body = await r.text();
     let parsed = null;
     try { parsed = JSON.parse(body); } catch (_) {}
     results.wfs_lp_pa_cbnd = {
-      http:         r.status,
-      feature_cnt:  parsed?.features?.length ?? null,
-      body_preview: body.slice(0, 600),
+      http:             r.status,
+      feature_cnt:      parsed?.features?.length ?? null,
+      response_headers: Object.fromEntries(r.headers.entries()),
+      body_preview:     body.slice(0, 600),
     };
   } catch (e) {
     results.wfs_lp_pa_cbnd = { error: e.message };
@@ -69,14 +79,18 @@ export default async function handler(req, res) {
     url.searchParams.set('OUTPUTFORMAT', 'application/json');
     url.searchParams.set('MAXFEATURES',  '3');
 
-    const r = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+    const r = await fetch(url.toString(), {
+      headers: VWORLD_HEADERS,
+      signal: AbortSignal.timeout(8000),
+    });
     const body = await r.text();
     let parsed = null;
     try { parsed = JSON.parse(body); } catch (_) {}
     results.wfs_lt_c_bldginfo = {
-      http:         r.status,
-      feature_cnt:  parsed?.features?.length ?? null,
-      body_preview: body.slice(0, 600),
+      http:             r.status,
+      feature_cnt:      parsed?.features?.length ?? null,
+      response_headers: Object.fromEntries(r.headers.entries()),
+      body_preview:     body.slice(0, 600),
     };
   } catch (e) {
     results.wfs_lt_c_bldginfo = { error: e.message };
@@ -92,9 +106,10 @@ export default async function handler(req, res) {
   }
 
   return res.status(200).json({
-    region:      process.env.VERCEL_REGION || 'unknown',
-    key_prefix:  apiKey.slice(0, 8) + '...',
-    test_coords: { lat, lng, bbox },
+    region:          process.env.VERCEL_REGION || 'unknown',
+    key_prefix:      apiKey.slice(0, 8) + '...',
+    request_headers: VWORLD_HEADERS,
+    test_coords:     { lat, lng, bbox },
     results,
   });
 }
