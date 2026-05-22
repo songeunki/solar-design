@@ -226,21 +226,39 @@ async def debug_building(address: str = "서울특별시 강남구 삼성동 169
     else:
         result["steps"]["building_api"] = {"status": "skip", "reason": "PNU 확보 실패"}
 
-    # Step 5: OSM Overpass (면적 + 방위각 + EW/NS 치수)
+    # Step 5: V-World WFS + OSM Overpass (면적 + 방위각 + EW/NS 치수)
     if loc:
+        # V-World WFS
         try:
-            area, azimuth, ew_m, ns_m = _building_info_from_osm(loc.lat, loc.lng)
+            from data_collector.vworld_polygon import get_building_polygon
+            vw_area, vw_az, vw_ew, vw_ns, vw_poly = get_building_polygon(loc.lat, loc.lng)
+            result["steps"]["vworld_wfs"] = {
+                "status":        "ok" if vw_poly else "no_data",
+                "area_m2":       vw_area,
+                "azimuth_deg":   vw_az,
+                "building_ew_m": vw_ew,
+                "building_ns_m": vw_ns,
+                "polygon_pts":   len(vw_poly) if vw_poly else 0,
+            }
+        except Exception as e:
+            result["steps"]["vworld_wfs"] = {"status": "error", "error": str(e)}
+
+        # OSM Overpass (버그 수정: 5개 언패킹)
+        try:
+            area, azimuth, ew_m, ns_m, _poly = _building_info_from_osm(loc.lat, loc.lng)
             result["steps"]["osm"] = {
                 "status":        "ok" if area else "no_data",
                 "area_m2":       area,
                 "azimuth_deg":   azimuth,
                 "building_ew_m": ew_m,
                 "building_ns_m": ns_m,
+                "polygon_pts":   len(_poly) if _poly else 0,
             }
         except Exception as e:
             result["steps"]["osm"] = {"status": "error", "error": str(e)}
     else:
-        result["steps"]["osm"] = {"status": "skip", "reason": "좌표 조회 실패"}
+        result["steps"]["vworld_wfs"] = {"status": "skip", "reason": "좌표 조회 실패"}
+        result["steps"]["osm"]        = {"status": "skip", "reason": "좌표 조회 실패"}
 
     return result
 

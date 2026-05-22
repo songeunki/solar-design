@@ -184,6 +184,7 @@ def run_pipeline(
             "areaUsed":      round(area_used_m2, 1),
             "areaSource":    area_source,
             "areaWarning":   area_warning,
+            "polygonSource": building.extra.get("polygon_source"),
         },
         "system": {
             "panelCount":   electrical.panel_count,

@@ -41,19 +41,34 @@ class BuildingAPI:
     """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
     def get_building_info(self, location: Location) -> BuildingInfo:
-        # OSM으로 건물 형상 사전 획득 (면적 + 방위각 + EW/NS 치수)
-        osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = _building_info_from_osm(
+        # 1차: V-World WFS polygon (Render 호환, 안정적)
+        from data_collector.vworld_polygon import get_building_polygon
+        osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = get_building_polygon(
             location.lat, location.lng
         )
+        polygon_source = "vworld"
+
+        # 2차: OSM Overpass fallback (V-World 실패 또는 키 미설정 시)
+        if osm_polygon is None:
+            osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = _building_info_from_osm(
+                location.lat, location.lng
+            )
+            polygon_source = "osm"
+
+        # azimuth None 방어 (V-World 성공했지만 방위각 계산 실패한 경우)
+        if osm_azimuth is None:
+            osm_azimuth = _DEFAULT_AZIMUTH
+
         warnings.warn(
-            f"[BuildingAPI] OSM 결과: azimuth={osm_azimuth}° "
+            f"[BuildingAPI] polygon_source={polygon_source}  azimuth={osm_azimuth}° "
             f"EW={osm_ew_m}m NS={osm_ns_m}m polygon={len(osm_polygon) if osm_polygon else 0}pts ({location.address})",
             stacklevel=2,
         )
 
         def _apply_osm(info: BuildingInfo) -> BuildingInfo:
-            info.roof_azimuth_deg          = osm_azimuth
-            info.extra["osm_azimuth_deg"]  = osm_azimuth
+            info.roof_azimuth_deg               = osm_azimuth
+            info.extra["osm_azimuth_deg"]        = osm_azimuth
+            info.extra["polygon_source"]         = polygon_source
             if osm_ew_m:
                 info.extra["building_ew_m"] = osm_ew_m
             if osm_ns_m:
