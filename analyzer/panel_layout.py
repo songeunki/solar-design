@@ -63,6 +63,25 @@ def _meter_to_latlng(
     return lat, lng
 
 
+def _center_in_polygon(lat: float, lng: float, polygon: list[dict]) -> bool:
+    """Ray-casting PIP. polygon: [{"lat": ..., "lng": ...}, ...]
+    회전 bbox 팽창으로 실제 지붕 밖에 생성된 패널 위치를 제거하는 데 사용.
+    """
+    n = len(polygon)
+    if n < 3:
+        return True
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]["lng"], polygon[i]["lat"]
+        xj, yj = polygon[j]["lng"], polygon[j]["lat"]
+        if ((yi > lat) != (yj > lat)) and \
+                (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
 # ── 데이터클래스 ────────────────────────────────────────────────────────────
 
 @dataclass
@@ -147,6 +166,16 @@ class PanelLayoutEngine:
 
         m_lng = M_PER_DEG_LAT * math.cos(math.radians(lat))
 
+        # ── 0. grid 기준점: polygon 중심 우선, 없으면 geocoded 주소 사용 ───
+        # geocoded address(lat/lng)와 V-World polygon 중심이 최대 수십 m 벗어날
+        # 수 있으므로, polygon이 있으면 centroid를 grid 원점으로 정렬한다.
+        if roof_polygon and len(roof_polygon) >= 3:
+            grid_lat = sum(p["lat"] for p in roof_polygon) / len(roof_polygon)
+            grid_lng = sum(p["lng"] for p in roof_polygon) / len(roof_polygon)
+        else:
+            grid_lat = lat
+            grid_lng = lng
+
         # ── 1. 건물 footprint ─────────────────────────────────────────────
         footprint = arch_area_m2 if (arch_area_m2 and arch_area_m2 > 0) else usable_area_m2
         if osm_building_ew_m and osm_building_ew_m > 0 \
@@ -179,10 +208,8 @@ class PanelLayoutEngine:
         row_count = max(1, int(avail_ns / row_spacing_m))   # NS 장변 → 행(많음)
         col_count = max(1, int(avail_ew / col_spacing_m))   # EW 단변 → 열(적음)
 
-        # ── 6. 단위 발전량 ────────────────────────────────────────────────
-        total         = row_count * col_count
-        base          = target_panel_count if (target_panel_count and target_panel_count > 0) else total
-        kwh_per_panel = annual_generation_kwh / base if base > 0 else 0
+        # ── 6. 격자 총 수 (kwh_per_panel은 polygon 수용량 확인 후 계산) ─────
+        total = row_count * col_count
 
         # ── 7. 위경도 단위 (하위 호환 — 2D 뷰어용) ───────────────────────
         panel_h_deg     = PANEL_H / M_PER_DEG_LAT
@@ -210,7 +237,7 @@ class PanelLayoutEngine:
                 dx * sin_r + dy * cos_r,
             )
 
-        # ── 9. 패널 목록 생성 ─────────────────────────────────────────────
+        # ── 9. 패널 목록 생성 (2-pass) ───────────────────────────────────
         # 박공지붕: r >= ceil(row_count/2) → 북사면
         r_split = (row_count + 1) // 2 if roof_shape == "gable" else None
 
@@ -218,21 +245,19 @@ class PanelLayoutEngine:
         bldg_sw_ew = -building_ew_m / 2 + MARGIN   # 서쪽 시작
         bldg_sw_ns = -building_ns_m / 2 + MARGIN   # 남쪽 시작
 
-        panels: list[Panel] = []
+        # ── 1차 패스: 격자 위치 계산 + PIP 필터링 ────────────────────────
+        # polygon bbox 기준 격자 생성 → 각 패널 중심이 지붕 polygon 내부인지
+        # 검증 후 실제 수용 가능 매수(polygon_capacity)를 산출한다.
+        _candidates: list[tuple] = []
         for r in range(row_count):
             for c in range(col_count):
-                flat_idx = r * col_count + c
+                sw_ew = bldg_sw_ew + c * col_spacing_m
+                sw_ns = bldg_sw_ns + r * row_spacing_m
 
-                # 패널 SW 오프셋 (건물 중심 기준, 회전 전)
-                sw_ew = bldg_sw_ew + c * col_spacing_m   # 동쪽으로
-                sw_ns = bldg_sw_ns + r * row_spacing_m   # 북쪽으로
-
-                # SW 꼭짓점 위경도
                 dx_r, dy_r = _rot(sw_ew, sw_ns)
-                p_lat, p_lng = _meter_to_latlng(lat, lng, dx_r, dy_r)
+                p_lat, p_lng = _meter_to_latlng(grid_lat, grid_lng, dx_r, dy_r)
 
-                # 4개 꼭짓점 SW→SE→NE→NW (회전 적용)
-                corners: list[dict] = []
+                corners_: list[dict] = []
                 for dx_off, dy_off in [
                     (0,       0      ),  # SW
                     (PANEL_W, 0      ),  # SE (+EW)
@@ -240,29 +265,41 @@ class PanelLayoutEngine:
                     (0,       PANEL_H),  # NW (+NS)
                 ]:
                     dx_r2, dy_r2 = _rot(sw_ew + dx_off, sw_ns + dy_off)
-                    c_lat, c_lng = _meter_to_latlng(lat, lng, dx_r2, dy_r2)
-                    corners.append({"lat": c_lat, "lng": c_lng})
+                    c_lat, c_lng = _meter_to_latlng(grid_lat, grid_lng, dx_r2, dy_r2)
+                    corners_.append({"lat": c_lat, "lng": c_lng})
 
-                # 상태 결정
+                center_lat = (corners_[0]["lat"] + corners_[2]["lat"]) / 2
+                center_lng = (corners_[0]["lng"] + corners_[2]["lng"]) / 2
+                in_poly = (not roof_polygon) or _center_in_polygon(
+                    center_lat, center_lng, roof_polygon
+                )
+                _candidates.append((r, c, p_lat, p_lng, corners_, in_poly))
+
+        # polygon 내부 실제 수용 가능 매수 → target_panel_count 대체
+        polygon_capacity = sum(1 for *_, ip in _candidates if ip)
+        eff_base = polygon_capacity if polygon_capacity > 0 else total
+        kwh_per_panel = annual_generation_kwh / eff_base if eff_base > 0 else 0
+
+        # ── 2차 패스: 상태 배정 ─────────────────────────────────────────
+        panels: list[Panel] = []
+        inside_idx = 0
+        for r, c, p_lat, p_lng, corners, in_poly in _candidates:
+            if not in_poly:
+                status, kwh_val = "buffer", 0.0
+            else:
                 if r_split is not None and r >= r_split:
-                    status  = "north"
-                    kwh_val = kwh_per_panel * 0.5
-                elif target_panel_count and flat_idx >= target_panel_count:
-                    status  = "buffer"
-                    kwh_val = 0.0
+                    status, kwh_val = "north", kwh_per_panel * 0.5
                 elif r == row_count - 1 and row_count > 2 and r_split is None:
-                    status  = "shade"
-                    kwh_val = kwh_per_panel
+                    status, kwh_val = "shade", kwh_per_panel
                 else:
-                    status  = "active"
-                    kwh_val = kwh_per_panel
-
-                panels.append(Panel(
-                    row=r, col=c,
-                    lat=p_lat, lng=p_lng,
-                    status=status, kwh_year=kwh_val,
-                    corners=corners,
-                ))
+                    status, kwh_val = "active", kwh_per_panel
+                inside_idx += 1
+            panels.append(Panel(
+                row=r, col=c,
+                lat=p_lat, lng=p_lng,
+                status=status, kwh_year=kwh_val,
+                corners=corners,
+            ))
 
         # ── 10. 지붕 윤곽 폴리곤 (회전 포함) ─────────────────────────────
         # 전달받은 폴리곤이 4개 이상의 유니크 좌표를 갖는지 검증
@@ -290,7 +327,7 @@ class PanelLayoutEngine:
             roof_polygon = []
             for bx, by in [(-hw, -hn), (hw, -hn), (hw, hn), (-hw, hn)]:
                 dx_r, dy_r = _rot(bx, by)
-                r_lat, r_lng = _meter_to_latlng(lat, lng, dx_r, dy_r)
+                r_lat, r_lng = _meter_to_latlng(grid_lat, grid_lng, dx_r, dy_r)
                 roof_polygon.append({"lat": r_lat, "lng": r_lng})
 
         # ── 11. 통계 ──────────────────────────────────────────────────────
@@ -320,13 +357,14 @@ class PanelLayoutEngine:
             "building_ew_m":    round(building_ew_m, 1),
             "building_ns_m":    round(building_ns_m, 1),
             "capture_radius_m": CAPTURE_RADIUS_M,
+            "polygon_capacity": polygon_capacity,
         }
 
         return PanelLayoutResult(
             panels=panels,
             roof_polygon=roof_polygon,
-            center_lat=lat,
-            center_lng=lng,
+            center_lat=grid_lat,
+            center_lng=grid_lng,
             panel_w_deg_lng=panel_w_deg,
             panel_h_deg_lat=panel_h_deg,
             row_spacing_deg=row_spacing_deg,
