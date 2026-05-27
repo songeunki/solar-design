@@ -81,7 +81,13 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
         setMessage(msg.message ?? '');
       } else if (msg.type === 'result') {
         setResult(msg.data);
-        if (msg.data?.lat && msg.data?.lng) {
+        // panel_layout.center_lat/lng는 V-World polygon centroid 기준
+        // geocoded address(lat/lng)와 최대 100m 오프셋 가능 → polygon 위치 우선 사용
+        const plCenterLat = msg.data?.panel_layout?.center_lat;
+        const plCenterLng = msg.data?.panel_layout?.center_lng;
+        if (plCenterLat && plCenterLng) {
+          setMarkerPos({ lat: plCenterLat, lng: plCenterLng });
+        } else if (msg.data?.lat && msg.data?.lng) {
           setMarkerPos({ lat: msg.data.lat, lng: msg.data.lng });
         }
         if (msg.data?.panel_layout?.roof_polygon) {

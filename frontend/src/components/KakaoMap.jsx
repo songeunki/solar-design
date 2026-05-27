@@ -177,16 +177,25 @@ export default function KakaoMap({
 
     if (minLat === Infinity) return;
 
-    // 자동 줌
+    // 패널 bbox 중심으로 지도 이동 후 줌 (geocoded 주소와 polygon 위치 최대 100m 차이 대응)
+    const panelCenterLat = (minLat + maxLat) / 2;
+    const panelCenterLng = (minLng + maxLng) / 2;
+    map.setCenter(new kakao.maps.LatLng(panelCenterLat, panelCenterLng));
     map.setLevel(fitZoomLevel(minLat, maxLat, minLng, maxLng));
 
     // 방위각 텍스트
     if (panelAzimuth != null) {
       const content = `<div style="background:rgba(0,0,0,0.65);color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;font-family:'Noto Sans KR',sans-serif;pointer-events:none;white-space:nowrap;">방위 ${panelAzimuth.toFixed(1)}°</div>`;
-      const pos = new kakao.maps.LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+      const pos = new kakao.maps.LatLng(panelCenterLat, panelCenterLng);
       const ov  = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: -0.4 });
       ov.setMap(map);
       azOverlayRef.current = ov;
+    }
+
+    // polygon을 panels 위에 재렌더 (렌더 순서상 panels가 polygon을 덮어쓰는 문제 방지)
+    if (polygonRef.current) {
+      polygonRef.current.setMap(null);
+      polygonRef.current.setMap(map);
     }
   }, [panels, panelAzimuth, mapReady]); // mapReady 추가 ← 핵심 수정
 

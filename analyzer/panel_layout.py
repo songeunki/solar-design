@@ -194,6 +194,38 @@ class PanelLayoutEngine:
         avail_ew = max(0.0, building_ew_m - 2 * MARGIN)
         avail_ns = max(0.0, building_ns_m - 2 * MARGIN)
 
+        # ── 2.5. polygon local 범위로 avail/SW 시작점 재계산 ─────────────
+        # world-aligned bbox EW/NS를 local EW/NS로 쓰면 회전된 polygon의
+        # 실제 경계와 달라 col 0~2가 비는 현상이 생긴다.
+        # roof_polygon이 있으면 역회전으로 local 좌표를 구해 정확한 범위 사용.
+        _poly_sw_ew: float | None = None
+        _poly_sw_ns: float | None = None
+        if roof_polygon and len(roof_polygon) >= 3:
+            _pre_az  = calculate_optimal_azimuth(roof_polygon)
+            _pre_rot = math.radians(_pre_az - 180.0)
+            _pre_cr  = math.cos(_pre_rot)
+            _pre_sr  = math.sin(_pre_rot)
+            _m_lng_g = M_PER_DEG_LAT * math.cos(math.radians(grid_lat))
+            _lo_ews: list[float] = []
+            _lo_nss: list[float] = []
+            for _pp in roof_polygon:
+                _dx_w = (_pp["lng"] - grid_lng) * _m_lng_g
+                _dy_w = (_pp["lat"] - grid_lat) * M_PER_DEG_LAT
+                # R^T (역회전): local = [[cr, sr], [-sr, cr]] * world
+                _lo_ews.append(_dx_w * _pre_cr + _dy_w * _pre_sr)
+                _lo_nss.append(-_dx_w * _pre_sr + _dy_w * _pre_cr)
+            _lo_ew_min, _lo_ew_max = min(_lo_ews), max(_lo_ews)
+            _lo_ns_min, _lo_ns_max = min(_lo_nss), max(_lo_nss)
+            _span_ew = _lo_ew_max - _lo_ew_min
+            _span_ns = _lo_ns_max - _lo_ns_min
+            if _span_ew > 2 * MARGIN and _span_ns > 2 * MARGIN:
+                avail_ew      = _span_ew - 2 * MARGIN
+                avail_ns      = _span_ns - 2 * MARGIN
+                _poly_sw_ew   = _lo_ew_min + MARGIN   # polygon 서쪽 경계 + margin
+                _poly_sw_ns   = _lo_ns_min + MARGIN   # polygon 남쪽 경계 + margin
+                building_ew_m = _span_ew
+                building_ns_m = _span_ns
+
         # ── 3. 행 이격거리 (남북, 동지 무음영) ───────────────────────────
         elev_rad      = math.radians(max(sun_elevation_winter_deg, 5.0))
         tilt_rad      = math.radians(tilt_deg)
@@ -242,8 +274,9 @@ class PanelLayoutEngine:
         r_split = (row_count + 1) // 2 if roof_shape == "gable" else None
 
         # 건물 SW 꼭짓점 오프셋 (미터, 회전 전)
-        bldg_sw_ew = -building_ew_m / 2 + MARGIN   # 서쪽 시작
-        bldg_sw_ns = -building_ns_m / 2 + MARGIN   # 남쪽 시작
+        # polygon이 있으면 local 실측 경계 기준, 없으면 bbox 중심 기준
+        bldg_sw_ew = _poly_sw_ew if _poly_sw_ew is not None else (-building_ew_m / 2 + MARGIN)
+        bldg_sw_ns = _poly_sw_ns if _poly_sw_ns is not None else (-building_ns_m / 2 + MARGIN)
 
         # ── 1차 패스: 격자 위치 계산 + PIP 필터링 ────────────────────────
         # polygon bbox 기준 격자 생성 → 각 패널 중심이 지붕 polygon 내부인지
