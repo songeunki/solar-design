@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 const KAKAO_APP_KEY = '1a26482813f863a4da8896cde91a820e';
+const M_PER_DEG     = 111_320;
 
 let kakaoSDKPromise = null;
 
@@ -17,19 +18,46 @@ function loadKakaoSDK() {
   return kakaoSDKPromise;
 }
 
+const PANEL_STYLE = {
+  active: { strokeColor: '#1E6FD9', fillColor: '#1E6FD9', fillOpacity: 0.5, strokeOpacity: 0.9 },
+  shade:  { strokeColor: '#FF8C00', fillColor: '#FF8C00', fillOpacity: 0.5, strokeOpacity: 0.9 },
+  north:  { strokeColor: '#718096', fillColor: '#718096', fillOpacity: 0.3, strokeOpacity: 0.6 },
+};
+
+const LEGEND = [
+  { color: '#1E6FD9', label: '활성 패널' },
+  { color: '#FF8C00', label: '그늘 예상' },
+  { color: '#718096', label: '북향' },
+];
+
+function fitZoomLevel(minLat, maxLat, minLng, maxLng) {
+  const midLat  = (minLat + maxLat) / 2;
+  const spanLatM = (maxLat - minLat) * M_PER_DEG;
+  const spanLngM = (maxLng - minLng) * M_PER_DEG * Math.cos(midLat * Math.PI / 180);
+  const spanM    = Math.max(spanLatM, spanLngM) * 1.7; // 70% margin
+  if (spanM < 35)  return 1;
+  if (spanM < 90)  return 2;
+  if (spanM < 220) return 3;
+  return 4;
+}
+
 export default function KakaoMap({
   center,
   markerPos,
   onMapClick,
   height = 340,
   buildingPolygon = null,
+  panels = null,        // [{corners:[{lat,lng}×4], status}]
+  panelAzimuth = null,  // number | null
 }) {
-  const mapRef       = useRef(null);
-  const mapObjRef    = useRef(null);
-  const overlayRef   = useRef(null);
-  const polygonRef   = useRef(null);
-  const markerPosRef   = useRef(markerPos);
-  markerPosRef.current = markerPos;
+  const mapRef          = useRef(null);
+  const mapObjRef       = useRef(null);
+  const overlayRef      = useRef(null);
+  const polygonRef      = useRef(null);
+  const panelPolysRef   = useRef([]);
+  const azOverlayRef    = useRef(null);
+  const markerPosRef    = useRef(markerPos);
+  markerPosRef.current  = markerPos;
   const [mapType, setMapType] = useState('skyview');
 
   // ── 초기화 ──────────────────────────────────────────────────────────────
@@ -44,8 +72,6 @@ export default function KakaoMap({
       });
       mapObjRef.current = map;
 
-      // SDK가 비동기로 초기화되는 동안 markerPos가 이미 설정된 경우
-      // useEffect([markerPos])는 map이 null이라 조기 종료됐으므로 여기서 직접 적용
       const mp = markerPosRef.current;
       if (mp) {
         const pos = new kakao.maps.LatLng(mp.lat, mp.lng);
@@ -112,7 +138,6 @@ export default function KakaoMap({
   }, [center]);
 
   // ── 건물 윤곽 폴리곤 ─────────────────────────────────────────────────────
-  // panel_layout.py에서 azimuth 회전이 roof_polygon 좌표에 이미 반영됨 → 그대로 사용
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
@@ -128,6 +153,59 @@ export default function KakaoMap({
     polygonRef.current = poly;
   }, [buildingPolygon]);
 
+  // ── 패널 폴리곤 그리기 ───────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !window.kakao?.maps) return;
+    const { kakao } = window;
+
+    // 이전 패널 + 방위각 오버레이 제거
+    panelPolysRef.current.forEach(p => p.setMap(null));
+    panelPolysRef.current = [];
+    if (azOverlayRef.current) { azOverlayRef.current.setMap(null); azOverlayRef.current = null; }
+    if (!panels?.length) return;
+
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLng = Infinity, maxLng = -Infinity;
+
+    for (const panel of panels) {
+      const st = PANEL_STYLE[panel.status];
+      if (!st) continue; // buffer: 표시 안 함
+
+      const path = (panel.corners ?? []).map(c => {
+        if (c.lat < minLat) minLat = c.lat;
+        if (c.lat > maxLat) maxLat = c.lat;
+        if (c.lng < minLng) minLng = c.lng;
+        if (c.lng > maxLng) maxLng = c.lng;
+        return new kakao.maps.LatLng(c.lat, c.lng);
+      });
+      if (path.length < 3) continue;
+
+      const poly = new kakao.maps.Polygon({
+        path,
+        strokeWeight: 1,
+        strokeColor:  st.strokeColor,  strokeOpacity: st.strokeOpacity,
+        fillColor:    st.fillColor,    fillOpacity:   st.fillOpacity,
+      });
+      poly.setMap(map);
+      panelPolysRef.current.push(poly);
+    }
+
+    if (minLat === Infinity) return;
+
+    // 자동 줌 (패널 bbox 기준)
+    map.setLevel(fitZoomLevel(minLat, maxLat, minLng, maxLng));
+
+    // 방위각 텍스트 오버레이 (건물 중심 위)
+    if (panelAzimuth != null) {
+      const content = `<div style="background:rgba(0,0,0,0.65);color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;font-family:'Noto Sans KR',sans-serif;pointer-events:none;white-space:nowrap;">방위 ${panelAzimuth.toFixed(1)}°</div>`;
+      const pos = new kakao.maps.LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+      const ov = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: -0.4 });
+      ov.setMap(map);
+      azOverlayRef.current = ov;
+    }
+  }, [panels, panelAzimuth]);
+
   // ── 토글 버튼 스타일 ──────────────────────────────────────────────────────
   const btnStyle = (type) => ({
     padding: '5px 12px', fontSize: 12, fontWeight: 700,
@@ -138,14 +216,37 @@ export default function KakaoMap({
       : { background: 'transparent', color: '#718096' }),
   });
 
+  const showLegend = panels?.some(p => p.status !== 'buffer');
+
   return (
-    <div className="map-wrapper" style={height != null ? { height } : undefined}>
+    <div className="map-wrapper" style={{ position: 'relative', ...(height != null ? { height } : {}) }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* 지도 타입 토글 */}
       <div className="map-type-toggle">
         <button className="map-toggle-btn" style={{ ...btnStyle('roadmap'), borderRadius: '7px 0 0 7px' }} onClick={() => handleTypeChange('roadmap')} title="일반 지도">🗺 일반</button>
         <div style={{ width: 1, background: 'rgba(0,0,0,0.1)', alignSelf: 'stretch' }} />
         <button className="map-toggle-btn" style={{ ...btnStyle('skyview'), borderRadius: '0 7px 7px 0' }} onClick={() => handleTypeChange('skyview')} title="위성 지도">🛰 위성</button>
       </div>
+
+      {/* 패널 범례 */}
+      {showLegend && (
+        <div style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 10,
+          background: 'rgba(0,0,0,0.68)', color: '#fff',
+          borderRadius: 6, padding: '5px 9px', fontSize: 11,
+          fontFamily: "'Noto Sans KR', sans-serif",
+          display: 'flex', flexDirection: 'column', gap: 3,
+          pointerEvents: 'none',
+        }}>
+          {LEGEND.map(({ color, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 12, height: 8, background: color, opacity: 0.9, borderRadius: 1, flexShrink: 0 }} />
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

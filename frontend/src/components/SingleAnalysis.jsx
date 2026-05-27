@@ -31,6 +31,8 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
   const [errorMsg, setErrorMsg]           = useState('');
   const [markerPos, setMarkerPos]         = useState(null);
   const [buildingPolygon, setBuildingPolygon] = useState(null);
+  const [panels,          setPanels]          = useState(null);
+  const [panelAzimuth,    setPanelAzimuth]    = useState(null);
   const [activeTab, setActiveTab]         = useState('location');
   const [newAddress, setNewAddress]       = useState('');
   const [currentAddress, setCurrentAddress] = useState('');
@@ -85,6 +87,12 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
         if (msg.data?.panel_layout?.roof_polygon) {
           setBuildingPolygon(msg.data.panel_layout.roof_polygon);
         }
+        if (msg.data?.panel_layout?.panels) {
+          setPanels(msg.data.panel_layout.panels);
+        }
+        if (msg.data?.panel_layout?.stats?.azimuth_deg != null) {
+          setPanelAzimuth(msg.data.panel_layout.stats.azimuth_deg);
+        }
         setStatus('done');
         onLoadingChange?.(false);
         setStep(5);
@@ -118,6 +126,8 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     setResult(null);
     setMarkerPos(null);
     setBuildingPolygon(null);
+    setPanels(null);
+    setPanelAzimuth(null);
     setNewAddress('');
     setCurrentAddress('');
     onResultChange?.(false);
@@ -255,6 +265,8 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
                 markerPos={markerPos}
                 onMapClick={(addr) => startAnalysis({ address: addr })}
                 buildingPolygon={buildingPolygon}
+                panels={panels}
+                panelAzimuth={panelAzimuth}
                 height={480}
               />
               {/* 분석 완료 배너 + 주소 입력 — 지도 하단 */}
