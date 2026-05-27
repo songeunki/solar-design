@@ -31,10 +31,10 @@ const LEGEND = [
 ];
 
 function fitZoomLevel(minLat, maxLat, minLng, maxLng) {
-  const midLat  = (minLat + maxLat) / 2;
+  const midLat   = (minLat + maxLat) / 2;
   const spanLatM = (maxLat - minLat) * M_PER_DEG;
   const spanLngM = (maxLng - minLng) * M_PER_DEG * Math.cos(midLat * Math.PI / 180);
-  const spanM    = Math.max(spanLatM, spanLngM) * 1.7; // 70% margin
+  const spanM    = Math.max(spanLatM, spanLngM) * 1.7;
   if (spanM < 35)  return 1;
   if (spanM < 90)  return 2;
   if (spanM < 220) return 3;
@@ -47,20 +47,19 @@ export default function KakaoMap({
   onMapClick,
   height = 340,
   buildingPolygon = null,
-  panels = null,        // [{corners:[{lat,lng}×4], status}]
-  panelAzimuth = null,  // number | null
+  panels = null,
+  panelAzimuth = null,
 }) {
-  const mapRef          = useRef(null);
-  const mapObjRef       = useRef(null);
-  const overlayRef      = useRef(null);
-  const polygonRef      = useRef(null);
-  const panelPolysRef   = useRef([]);
-  const azOverlayRef    = useRef(null);
-  const markerPosRef    = useRef(markerPos);
-  markerPosRef.current  = markerPos;
-  const [mapType, setMapType] = useState('skyview');
+  const mapRef        = useRef(null);
+  const mapObjRef     = useRef(null);
+  const overlayRef    = useRef(null);
+  const polygonRef    = useRef(null);
+  const panelPolysRef = useRef([]);
+  const azOverlayRef  = useRef(null);
+  const [mapType,  setMapType]  = useState('skyview');
+  const [mapReady, setMapReady] = useState(false); // 지도 초기화 완료 트리거
 
-  // ── 초기화 ──────────────────────────────────────────────────────────────
+  // ── 1. 초기화 (지도 생성만, 그리기는 각 useEffect에서) ──────────────────────
   useEffect(() => {
     loadKakaoSDK().then(() => {
       if (!mapRef.current) return;
@@ -71,21 +70,6 @@ export default function KakaoMap({
         mapTypeId: kakao.maps.MapTypeId.HYBRID,
       });
       mapObjRef.current = map;
-
-      const mp = markerPosRef.current;
-      if (mp) {
-        const pos = new kakao.maps.LatLng(mp.lat, mp.lng);
-        if (overlayRef.current) overlayRef.current.setMap(null);
-        const content = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
-          📍 ${mp.label || '분석 위치'}
-          <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #1E6FD9;"></div>
-        </div>`;
-        const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.4 });
-        overlay.setMap(map);
-        overlayRef.current = overlay;
-        map.setCenter(pos);
-        map.setLevel(1);
-      }
 
       if (onMapClick) {
         const geo = new kakao.maps.services.Geocoder();
@@ -98,10 +82,13 @@ export default function KakaoMap({
           });
         });
       }
-    }).catch((e) => console.error(e));
+
+      // 모든 그리기 useEffect를 재실행시킴
+      setMapReady(true);
+    }).catch(console.error);
   }, []);
 
-  // ── 지도 타입 전환 ──────────────────────────────────────────────────────
+  // ── 2. 지도 타입 전환 ────────────────────────────────────────────────────────
   const handleTypeChange = (type) => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
@@ -111,13 +98,12 @@ export default function KakaoMap({
     setMapType(type);
   };
 
-  // ── 마커 + panTo ────────────────────────────────────────────────────────
+  // ── 3. 마커 + panTo (mapReady 포함 → 마운트 시점 데이터도 처리) ─────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !markerPos || !window.kakao?.maps) return;
     const { kakao } = window;
     const pos = new kakao.maps.LatLng(markerPos.lat, markerPos.lng);
-
     if (overlayRef.current) overlayRef.current.setMap(null);
     const content = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
       📍 ${markerPos.label || '분석 위치'}
@@ -127,17 +113,18 @@ export default function KakaoMap({
     overlay.setMap(map);
     overlayRef.current = overlay;
     map.setCenter(pos);
-    map.setLevel(1);
-  }, [markerPos]);
+    // panels 있으면 zoom은 panels useEffect가 담당, 없으면 level 1
+    if (!panels?.length) map.setLevel(1);
+  }, [markerPos, mapReady]); // mapReady 추가 ← 핵심 수정
 
-  // ── 중심 이동 ────────────────────────────────────────────────────────────
+  // ── 4. 중심 이동 ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !center || markerPos || !window.kakao?.maps) return;
     map.panTo(new window.kakao.maps.LatLng(center.lat, center.lng));
-  }, [center]);
+  }, [center, mapReady]);
 
-  // ── 건물 윤곽 폴리곤 ─────────────────────────────────────────────────────
+  // ── 5. 건물 윤곽 폴리곤 ──────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
@@ -151,15 +138,14 @@ export default function KakaoMap({
     });
     poly.setMap(map);
     polygonRef.current = poly;
-  }, [buildingPolygon]);
+  }, [buildingPolygon, mapReady]); // mapReady 추가 ← 핵심 수정
 
-  // ── 패널 폴리곤 그리기 ───────────────────────────────────────────────────
+  // ── 6. 패널 폴리곤 ──────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapObjRef.current;
     if (!map || !window.kakao?.maps) return;
     const { kakao } = window;
 
-    // 이전 패널 + 방위각 오버레이 제거
     panelPolysRef.current.forEach(p => p.setMap(null));
     panelPolysRef.current = [];
     if (azOverlayRef.current) { azOverlayRef.current.setMap(null); azOverlayRef.current = null; }
@@ -171,7 +157,6 @@ export default function KakaoMap({
     for (const panel of panels) {
       const st = PANEL_STYLE[panel.status];
       if (!st) continue; // buffer: 표시 안 함
-
       const path = (panel.corners ?? []).map(c => {
         if (c.lat < minLat) minLat = c.lat;
         if (c.lat > maxLat) maxLat = c.lat;
@@ -180,7 +165,6 @@ export default function KakaoMap({
         return new kakao.maps.LatLng(c.lat, c.lng);
       });
       if (path.length < 3) continue;
-
       const poly = new kakao.maps.Polygon({
         path,
         strokeWeight: 1,
@@ -193,20 +177,20 @@ export default function KakaoMap({
 
     if (minLat === Infinity) return;
 
-    // 자동 줌 (패널 bbox 기준)
+    // 자동 줌
     map.setLevel(fitZoomLevel(minLat, maxLat, minLng, maxLng));
 
-    // 방위각 텍스트 오버레이 (건물 중심 위)
+    // 방위각 텍스트
     if (panelAzimuth != null) {
       const content = `<div style="background:rgba(0,0,0,0.65);color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;font-family:'Noto Sans KR',sans-serif;pointer-events:none;white-space:nowrap;">방위 ${panelAzimuth.toFixed(1)}°</div>`;
       const pos = new kakao.maps.LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-      const ov = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: -0.4 });
+      const ov  = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: -0.4 });
       ov.setMap(map);
       azOverlayRef.current = ov;
     }
-  }, [panels, panelAzimuth]);
+  }, [panels, panelAzimuth, mapReady]); // mapReady 추가 ← 핵심 수정
 
-  // ── 토글 버튼 스타일 ──────────────────────────────────────────────────────
+  // ── 토글 스타일 ──────────────────────────────────────────────────────────────
   const btnStyle = (type) => ({
     padding: '5px 12px', fontSize: 12, fontWeight: 700,
     fontFamily: "'Noto Sans KR', sans-serif", border: 'none', cursor: 'pointer',
