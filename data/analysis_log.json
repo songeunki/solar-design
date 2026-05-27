@@ -187,5 +187,14 @@
     "annual_kwh": 563572,
     "roi_years": 9.6,
     "azimuth_deg": 158.8
+  },
+  {
+    "timestamp": "2026-05-27 13:38:18",
+    "ip": "1.223.240.125",
+    "address": "강남 삼성동 169",
+    "capacity_kw": 94.72,
+    "annual_kwh": 111512,
+    "roi_years": 9.5,
+    "azimuth_deg": 164.4
   }
 ]
