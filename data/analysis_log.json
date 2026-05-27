@@ -196,5 +196,14 @@
     "annual_kwh": 111512,
     "roi_years": 9.5,
     "azimuth_deg": 164.4
+  },
+  {
+    "timestamp": "2026-05-27 13:38:40",
+    "ip": "1.223.240.125",
+    "address": "서울특별시 강남구 영동대로96길 34",
+    "capacity_kw": 83.84,
+    "annual_kwh": 98704,
+    "roi_years": 9.5,
+    "azimuth_deg": 164.4
   }
 ]
