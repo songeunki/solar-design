@@ -41,21 +41,36 @@ class BuildingAPI:
     """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
     def get_building_info(self, location: Location) -> BuildingInfo:
-        # 1차: V-World WFS polygon (Render 호환, 안정적)
+        # 1단계: PNU 확보 → 건축물대장 (archArea 힌트 추출 목적)
+        _pnu:           str | None  = None
+        _register_item: dict | None = None
+        _arch_area_hint: float | None = None
+        try:
+            _pnu = _get_pnu(location.address)
+        except BuildingAPIError as e:
+            warnings.warn(f"[BuildingAPI] PNU 조회 실패: {e}", stacklevel=2)
+
+        if _pnu:
+            try:
+                _register_item  = _fetch_building_item(_pnu)
+                _arch_area_hint = float(_register_item.get("archArea") or 0) or None
+            except BuildingAPIError as e:
+                warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
+
+        # 2단계: V-World WFS polygon (archArea 힌트로 대형 복합 필지 오선택 방지)
         from data_collector.vworld_polygon import get_building_polygon
         osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = get_building_polygon(
-            location.lat, location.lng
+            location.lat, location.lng, arch_area_m2=_arch_area_hint
         )
         polygon_source = "vworld"
 
-        # 2차: OSM Overpass fallback (V-World 실패 또는 키 미설정 시)
+        # 3단계: OSM Overpass fallback (V-World 실패 시)
         if osm_polygon is None:
             osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = _building_info_from_osm(
                 location.lat, location.lng
             )
             polygon_source = "osm"
 
-        # azimuth None 방어 (V-World 성공했지만 방위각 계산 실패한 경우)
         if osm_azimuth is None:
             osm_azimuth = _DEFAULT_AZIMUTH
 
@@ -77,24 +92,13 @@ class BuildingAPI:
                 info.extra["osm_polygon"] = [[c[0], c[1]] for c in osm_polygon]
             return info
 
-        # 1단계: PNU 확보
-        _pnu: str | None = None
-        try:
-            _pnu = _get_pnu(location.address)
-        except BuildingAPIError as e:
-            warnings.warn(f"[BuildingAPI] PNU 조회 실패: {e}", stacklevel=2)
+        # 4단계: 건축물대장 결과 있으면 반환 (1단계에서 이미 취득)
+        if _register_item:
+            info = _apply_osm(_parse_item(location.address, _register_item))
+            info.extra["pnu"] = _pnu
+            return info
 
-        # 2단계: 건축물대장 API
-        if _pnu:
-            try:
-                item = _fetch_building_item(_pnu)
-                info = _apply_osm(_parse_item(location.address, item))
-                info.extra["pnu"] = _pnu
-                return info
-            except BuildingAPIError as e:
-                warnings.warn(f"[BuildingAPI] 건축물대장 실패: {e}", stacklevel=2)
-
-        # 3단계: OSM 면적 폴백
+        # 5단계: OSM 면적 폴백
         if osm_area:
             warnings.warn(
                 f"[BuildingAPI] OSM 면적 사용: {osm_area:.1f}㎡ ({location.address})",

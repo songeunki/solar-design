@@ -66,6 +66,26 @@ def _bbox_area(feature: dict) -> float:
         return 0.0
 
 
+def _approx_area_m2(feature: dict) -> float:
+    """Shoelace 공식으로 외곽 링 실제 면적(m²) 계산."""
+    ring = _outer_ring(feature)
+    if not ring or len(ring) < 3:
+        return 0.0
+    try:
+        n = len(ring)
+        a = 0.0
+        for i in range(n):
+            j = (i + 1) % n
+            xi = ring[i][0] * _M_PER_DEG * math.cos(math.radians(ring[i][1]))
+            yi = ring[i][1] * _M_PER_DEG
+            xj = ring[j][0] * _M_PER_DEG * math.cos(math.radians(ring[j][1]))
+            yj = ring[j][1] * _M_PER_DEG
+            a += xi * yj - xj * yi
+        return abs(a) / 2
+    except Exception:
+        return 0.0
+
+
 def _point_in_ring(lng: float, lat: float, ring: list) -> bool:
     """Ray-casting Point-in-Polygon. ring: [[lng, lat], ...]"""
     inside = False
@@ -159,7 +179,8 @@ def _metrics_from_coords(
 def get_building_polygon(
     lat: float,
     lng: float,
-    api_key: str = "",          # 프록시 방식에서는 미사용 (하위 호환 유지)
+    api_key: str = "",              # 프록시 방식에서는 미사용 (하위 호환 유지)
+    arch_area_m2: float | None = None,  # 건축면적 힌트 — 대형 복합 필지 오선택 방지
 ) -> tuple[float | None, float | None, float | None, float | None, list | None]:
     """Vercel 프록시 경유로 건물 footprint polygon 조회.
 
@@ -195,6 +216,9 @@ def get_building_polygon(
 
         # 이 레이어에서 PIP 통과 feature가 있으면 바로 사용
         pip = [f for f in features if _contains_point(f, lat, lng)]
+        # archArea 힌트: 2.5배 초과 polygon 제외 (대형 복합 필지 오선택 방지)
+        if arch_area_m2 and pip:
+            pip = [f for f in pip if _approx_area_m2(f) <= 2.5 * arch_area_m2]
         if pip:
             feature = max(pip, key=_bbox_area)
             coords  = _to_coords(feature)
@@ -208,14 +232,31 @@ def get_building_polygon(
 
     # ── 2차: 모든 레이어에 PIP 없음 → centroid 거리 fallback ────────────────
     if all_features:
-        logger.debug("V-World PIP 매칭 없음 → centroid fallback (전체 %d개)", len(all_features))
-        _, feature = min(
-            all_features,
-            key=lambda kf: math.hypot(
-                _centroid(kf[1])[0] - lng,
-                _centroid(kf[1])[1] - lat,
-            ),
+        # archArea 힌트가 있으면 2.5배 초과 feature 제외
+        candidates = all_features
+        if arch_area_m2:
+            filtered = [(k, f) for k, f in all_features
+                        if _approx_area_m2(f) <= 2.5 * arch_area_m2]
+            if filtered:
+                candidates = filtered
+        logger.debug(
+            "V-World PIP 매칭 없음 → fallback (%d/%d개)",
+            len(candidates), len(all_features),
         )
+        if arch_area_m2:
+            # archArea와 면적이 가장 가까운 polygon 선택 (대형 복합지 오선택 방지)
+            _, feature = min(
+                candidates,
+                key=lambda kf: abs(_approx_area_m2(kf[1]) - arch_area_m2) / arch_area_m2,
+            )
+        else:
+            _, feature = min(
+                candidates,
+                key=lambda kf: math.hypot(
+                    _centroid(kf[1])[0] - lng,
+                    _centroid(kf[1])[1] - lat,
+                ),
+            )
         coords = _to_coords(feature)
         if coords and len(coords) >= 3:
             area, azimuth, ew_m, ns_m = _metrics_from_coords(coords)
