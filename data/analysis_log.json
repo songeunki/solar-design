@@ -376,5 +376,14 @@
     "annual_kwh": 53536,
     "roi_years": 8.9,
     "azimuth_deg": 138.1
+  },
+  {
+    "timestamp": "2026-05-28 07:48:18",
+    "ip": "115.94.191.172",
+    "address": "부산광역시 강서구 체육공원로52번길 86-1",
+    "capacity_kw": 22.4,
+    "annual_kwh": 28036,
+    "roi_years": 9.0,
+    "azimuth_deg": 228.3
   }
 ]
