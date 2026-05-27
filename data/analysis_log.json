@@ -268,5 +268,14 @@
     "annual_kwh": 14906,
     "roi_years": 8.7,
     "azimuth_deg": 205.5
+  },
+  {
+    "timestamp": "2026-05-27 14:40:37",
+    "ip": "211.235.89.17",
+    "address": "경상북도 안동시 도산면 태산길 43-16",
+    "capacity_kw": 8.32,
+    "annual_kwh": 10766,
+    "roi_years": 8.7,
+    "azimuth_deg": 205.5
   }
 ]
