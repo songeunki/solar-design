@@ -259,5 +259,14 @@
     "annual_kwh": 32843,
     "roi_years": 9.0,
     "azimuth_deg": 228.4
+  },
+  {
+    "timestamp": "2026-05-27 14:39:19",
+    "ip": "211.235.89.17",
+    "address": "태자리999",
+    "capacity_kw": 11.52,
+    "annual_kwh": 14906,
+    "roi_years": 8.7,
+    "azimuth_deg": 205.5
   }
 ]
