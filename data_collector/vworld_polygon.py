@@ -252,11 +252,19 @@ def get_building_polygon(
             len(candidates), len(all_features),
         )
         if arch_area_m2:
-            # archArea와 면적이 가장 가까운 polygon 선택
-            _, feature = min(
-                candidates,
-                key=lambda kf: abs(_approx_area_m2(kf[1]) - arch_area_m2) / arch_area_m2,
-            )
+            # 면적 오차(50%) + 거리(50%) 복합 스코어 → 가장 낮은 쪽 선택
+            # 거리 정규화 기준: 50m (일반 주거 건물 지오코딩 오차 상한)
+            def _fallback_score(kf, _aa=arch_area_m2, _lat=lat, _lng=lng):
+                f    = kf[1]
+                cx, cy = _centroid(f)
+                area   = _approx_area_m2(f)
+                area_err  = abs(area - _aa) / _aa
+                dist_norm = math.hypot(
+                    (cx - _lng) * _M_PER_DEG * math.cos(math.radians(_lat)),
+                    (cy - _lat) * _M_PER_DEG,
+                ) / 50.0
+                return 0.5 * area_err + 0.5 * dist_norm
+            _, feature = min(candidates, key=_fallback_score)
         else:
             _, feature = min(
                 candidates,
@@ -268,9 +276,14 @@ def get_building_polygon(
         coords = _to_coords(feature)
         if coords and len(coords) >= 3:
             area, azimuth, ew_m, ns_m = _metrics_from_coords(coords)
+            cx, cy = _centroid(feature)
+            dist_m = math.hypot(
+                (cx - lng) * _M_PER_DEG * math.cos(math.radians(lat)),
+                (cy - lat) * _M_PER_DEG,
+            )
             logger.info(
-                "V-World 프록시 centroid fallback: %d pts  area=%.1f㎡",
-                len(coords), area or 0,
+                "V-World 프록시 fallback: %d pts  area=%.1f㎡  dist=%.1fm",
+                len(coords), area or 0, dist_m,
             )
             return (round(area, 1) if area and area > 5 else None), azimuth, ew_m, ns_m, coords
 
