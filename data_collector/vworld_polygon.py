@@ -216,9 +216,10 @@ def get_building_polygon(
 
         # 이 레이어에서 PIP 통과 feature가 있으면 바로 사용
         pip = [f for f in features if _contains_point(f, lat, lng)]
-        # archArea 힌트: 2.5배 초과 polygon 제외 (대형 복합 필지 오선택 방지)
+        # archArea 힌트: 1.8배 초과 polygon 제외 (대형 필지/복합건물 오선택 방지)
+        # 2.35x 필지 경계가 통과했던 2.5x보다 엄격하게 조정
         if arch_area_m2 and pip:
-            pip = [f for f in pip if _approx_area_m2(f) <= 2.5 * arch_area_m2]
+            pip = [f for f in pip if _approx_area_m2(f) <= 1.8 * arch_area_m2]
         if pip:
             feature = max(pip, key=_bbox_area)
             coords  = _to_coords(feature)
@@ -232,19 +233,26 @@ def get_building_polygon(
 
     # ── 2차: 모든 레이어에 PIP 없음 → centroid 거리 fallback ────────────────
     if all_features:
-        # archArea 힌트가 있으면 2.5배 초과 feature 제외
+        # archArea 힌트: 0.4x~1.8x 범위만 허용 (대형 필지/소형 부속건물 모두 제외)
         candidates = all_features
         if arch_area_m2:
             filtered = [(k, f) for k, f in all_features
-                        if _approx_area_m2(f) <= 2.5 * arch_area_m2]
+                        if 0.4 * arch_area_m2 <= _approx_area_m2(f) <= 1.8 * arch_area_m2]
             if filtered:
                 candidates = filtered
+            else:
+                # 범위 내 feature 없음 → V-World로 건물 특정 불가 → OSM fallback 위임
+                logger.debug(
+                    "V-World fallback: archArea 범위(0.4x~1.8x=%.0f~%.0fm²) 내 feature 없음 → None 반환",
+                    0.4 * arch_area_m2, 1.8 * arch_area_m2,
+                )
+                return None, None, None, None, None
         logger.debug(
             "V-World PIP 매칭 없음 → fallback (%d/%d개)",
             len(candidates), len(all_features),
         )
         if arch_area_m2:
-            # archArea와 면적이 가장 가까운 polygon 선택 (대형 복합지 오선택 방지)
+            # archArea와 면적이 가장 가까운 polygon 선택
             _, feature = min(
                 candidates,
                 key=lambda kf: abs(_approx_area_m2(kf[1]) - arch_area_m2) / arch_area_m2,

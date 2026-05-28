@@ -201,8 +201,7 @@ class PanelLayoutEngine:
         _poly_sw_ew: float | None = None
         _poly_sw_ns: float | None = None
         if roof_polygon and len(roof_polygon) >= 3:
-            _pre_az  = calculate_optimal_azimuth(roof_polygon)
-            _pre_rot = math.radians(_pre_az - 180.0)
+            _pre_rot = math.radians(azimuth_deg - 180.0)
             _pre_cr  = math.cos(_pre_rot)
             _pre_sr  = math.sin(_pre_rot)
             _m_lng_g = M_PER_DEG_LAT * math.cos(math.radians(grid_lat))
@@ -250,13 +249,8 @@ class PanelLayoutEngine:
         col_spacing_deg = col_spacing_m / m_lng
 
         # ── 8. 방위각 회전 설정 ───────────────────────────────────────────
-        # 기본값(180°) + 폴리곤 있으면 가장 긴 변 기준 남향 면으로 자동 계산
-        if roof_polygon:
-            poly_azimuth = calculate_optimal_azimuth(roof_polygon)
-            print(f"[AZIMUTH_DEBUG] polygon_calc: {len(roof_polygon)}pts → {poly_azimuth}°")
-            azimuth_deg = poly_azimuth
-        else:
-            print(f"[AZIMUTH_DEBUG] polygon_calc skipped: azimuth_deg={azimuth_deg}  roof_polygon=None")
+        # azimuth_deg: 파이프라인이 계산한 값 (OSM 또는 V-World polygon 기반)을 그대로 사용.
+        # Step 2.5의 역회전도 동일 azimuth_deg 기준 → 일관성 보장.
         # rot_rad = azimuth_deg - 180  (정남향=0°, SE=-45°, SW=+45°)
         rot_rad = math.radians(azimuth_deg - 180.0)
         cos_r   = math.cos(rot_rad)
