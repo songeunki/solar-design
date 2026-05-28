@@ -444,12 +444,12 @@ def _building_info_from_osm(
     """
     # ── 건물 폴리곤 조회 (body = tags 포함) ──────────────────────────────
     query = (
-        f"[out:json][timeout:12];"
+        f"[out:json][timeout:25];"
         f"way[\"building\"](around:{radius_m},{lat},{lng});"
         f"out body geom;"
     )
     try:
-        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=15)
+        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=30)
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
     except Exception:
