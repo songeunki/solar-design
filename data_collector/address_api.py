@@ -21,11 +21,19 @@ class AddressAPIError(Exception):
 
 
 class AddressAPI:
-    """주소 → 위도/경도 변환. VWorld 우선, 실패 시 Kakao REST API 폴백."""
+    """주소 → 위도/경도 변환. Kakao 우선(카카오맵과 동일 DB), 실패 시 VWorld 폴백."""
 
     def get_coordinates(self, address: str) -> Location:
-        # 1단계: VWorld (도로명 → 지번)
-        vworld_fail_reason = ""
+        # 1단계: Kakao REST API (카카오맵과 동일 geocoding 정확도)
+        loc = _kakao_geocode(address)
+        if loc:
+            return loc
+
+        # 2단계: VWorld 폴백 (도로명 → 지번)
+        warnings.warn(
+            f"[AddressAPI] Kakao 실패, VWorld로 폴백합니다: '{address}'",
+            stacklevel=2,
+        )
         for addr_type in ("road", "parcel"):
             try:
                 data = _vworld_request(address, addr_type)
@@ -39,23 +47,11 @@ class AddressAPI:
                         sido=sido,
                         sigungu=sigungu,
                     )
-            except AddressAPIError as e:
-                # 네트워크·HTTP 오류 → 지번 재시도 없이 바로 폴백
-                vworld_fail_reason = str(e)
+            except AddressAPIError:
                 break
 
-        # 2단계: Kakao REST API 폴백
-        warnings.warn(
-            f"[AddressAPI] VWorld 실패({vworld_fail_reason or '결과 없음'}), "
-            "Kakao REST API로 폴백합니다.",
-            stacklevel=2,
-        )
-        loc = _kakao_geocode(address)
-        if loc:
-            return loc
-
         raise AddressAPIError(
-            f"주소 좌표를 찾을 수 없습니다 (VWorld·Kakao 모두 실패): '{address}'"
+            f"주소 좌표를 찾을 수 없습니다 (Kakao·VWorld 모두 실패): '{address}'"
         )
 
 
