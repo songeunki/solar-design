@@ -45,6 +45,7 @@ export default function KakaoMap({
   center,
   markerPos,
   onMapClick,
+  onMarkerDragEnd = null,
   height = 340,
   buildingPolygon = null,
   panels = null,
@@ -52,7 +53,8 @@ export default function KakaoMap({
 }) {
   const mapRef        = useRef(null);
   const mapObjRef     = useRef(null);
-  const overlayRef    = useRef(null);
+  const markerRef     = useRef(null);   // draggable 표준 마커
+  const overlayRef    = useRef(null);   // 라벨 CustomOverlay
   const polygonRef    = useRef(null);
   const panelPolysRef = useRef([]);
   const azOverlayRef  = useRef(null);
@@ -104,18 +106,48 @@ export default function KakaoMap({
     if (!map || !markerPos || !window.kakao?.maps) return;
     const { kakao } = window;
     const pos = new kakao.maps.LatLng(markerPos.lat, markerPos.lng);
-    if (overlayRef.current) overlayRef.current.setMap(null);
-    const content = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
+
+    // 기존 마커·오버레이 제거
+    if (markerRef.current) { markerRef.current.setMap(null); markerRef.current = null; }
+    if (overlayRef.current) { overlayRef.current.setMap(null); }
+
+    // 라벨 콘텐츠 (마커 위 또는 핀 위 표시)
+    const labelContent = `<div style="background:#1E6FD9;color:white;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(30,111,217,0.4);position:relative;">
       📍 ${markerPos.label || '분석 위치'}
       <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #1E6FD9;"></div>
     </div>`;
-    const overlay = new kakao.maps.CustomOverlay({ position: pos, content, yAnchor: 1.4 });
-    overlay.setMap(map);
-    overlayRef.current = overlay;
+
+    if (onMarkerDragEnd) {
+      // ── draggable 표준 마커 + 라벨 오버레이 ──────────────────────────────
+      const marker = new kakao.maps.Marker({ position: pos });
+      marker.setMap(map);
+      marker.setDraggable(true);
+      markerRef.current = marker;
+
+      // 라벨은 마커 위에 배치 (yAnchor: 2.5 → 표준 마커 39px 상단에 표시)
+      const overlay = new kakao.maps.CustomOverlay({ position: pos, content: labelContent, yAnchor: 2.5 });
+      overlay.setMap(map);
+      overlayRef.current = overlay;
+
+      kakao.maps.event.addListener(marker, 'drag', () => {
+        overlay.setPosition(marker.getPosition());
+      });
+      kakao.maps.event.addListener(marker, 'dragend', () => {
+        const p = marker.getPosition();
+        overlay.setPosition(p);
+        onMarkerDragEnd(p.getLat(), p.getLng());
+      });
+    } else {
+      // ── 기존 방식: CustomOverlay만 (드래그 없음) ─────────────────────────
+      const overlay = new kakao.maps.CustomOverlay({ position: pos, content: labelContent, yAnchor: 1.4 });
+      overlay.setMap(map);
+      overlayRef.current = overlay;
+    }
+
     map.setCenter(pos);
     // panels 있으면 zoom은 panels useEffect가 담당, 없으면 level 1
     if (!panels?.length) map.setLevel(1);
-  }, [markerPos, mapReady]); // mapReady 추가 ← 핵심 수정
+  }, [markerPos, mapReady, onMarkerDragEnd]);
 
   // ── 4. 중심 이동 ─────────────────────────────────────────────────────────────
   useEffect(() => {

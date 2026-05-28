@@ -28,12 +28,15 @@ def run_pipeline(
     address: str,
     on_progress: ProgressCb | None = None,
     azimuth_override: float | None = None,
+    lat_override: float | None = None,
+    lng_override: float | None = None,
 ) -> dict:
     """단일 주소 전체 파이프라인 실행. 동기 함수 (ThreadPoolExecutor로 호출).
 
     azimuth_override: 사용자 직접 입력 방위각(°). None이면 OSM 자동 계산값 사용.
+    lat_override/lng_override: 핀 드래그 재분석용. geocoding 결과를 이 좌표로 덮어씀.
     """
-    from data_collector.address_api import AddressAPI
+    from data_collector.address_api import AddressAPI, Location
     from data_collector.building_api import BuildingAPI
     from data_collector.weather_api import WeatherAPI
     from analyzer.roof_analyzer import RoofAnalyzer
@@ -47,6 +50,17 @@ def run_pipeline(
 
     p(1, "주소 조회")
     location = AddressAPI().get_coordinates(address)
+
+    # 핀 드래그 재분석: geocoding 좌표를 사용자 지정 좌표로 교체
+    # (PNU·건축물대장은 원래 주소 기반 유지, V-World polygon만 새 좌표로 조회)
+    if lat_override is not None and lng_override is not None:
+        location = Location(
+            address=location.address,
+            lat=lat_override,
+            lng=lng_override,
+            sido=location.sido,
+            sigungu=location.sigungu,
+        )
 
     p(2, "건물 정보 수집")
     building = BuildingAPI().get_building_info(location)

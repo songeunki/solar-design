@@ -86,6 +86,8 @@ router = APIRouter(tags=["analyze"])
 class AnalyzeRequest(BaseModel):
     address: str
     azimuth_override: float | None = None
+    lat_override: float | None = None
+    lng_override: float | None = None
 
 
 # ── REST ─────────────────────────────────────────────────────────────────────
@@ -132,7 +134,11 @@ async def post_analyze(req: AnalyzeRequest):
     loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(
-            None, run_pipeline, req.address, None, req.azimuth_override
+            None,
+            lambda: run_pipeline(
+                req.address, None, req.azimuth_override,
+                req.lat_override, req.lng_override,
+            ),
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -293,6 +299,18 @@ async def ws_analyze(websocket: WebSocket):
                     azimuth_override = v
             except (TypeError, ValueError):
                 pass
+
+        # 핀 드래그 좌표 override
+        lat_override: float | None = None
+        lng_override: float | None = None
+        raw_lat = data.get("lat_override")
+        raw_lng = data.get("lng_override")
+        if raw_lat is not None and raw_lng is not None:
+            try:
+                lat_override = float(raw_lat)
+                lng_override = float(raw_lng)
+            except (TypeError, ValueError):
+                pass
     except WebSocketDisconnect:
         return
 
@@ -308,7 +326,12 @@ async def ws_analyze(websocket: WebSocket):
 
     def run() -> None:
         try:
-            result = run_pipeline(address, on_progress, azimuth_override=azimuth_override)
+            result = run_pipeline(
+                address, on_progress,
+                azimuth_override=azimuth_override,
+                lat_override=lat_override,
+                lng_override=lng_override,
+            )
             asyncio.run_coroutine_threadsafe(
                 queue.put({"type": "result", "data": result}),
                 loop,

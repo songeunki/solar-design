@@ -36,16 +36,22 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
   const [activeTab, setActiveTab]         = useState('location');
   const [newAddress, setNewAddress]       = useState('');
   const [currentAddress, setCurrentAddress] = useState('');
+  const [draggedPos, setDraggedPos]       = useState(null); // 핀 드래그 후 새 위치
 
   const wsRef     = useRef(null);
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const startAnalysis = useCallback(({ address, azimuth_override = null }) => {
+  const handleMarkerDragEnd = useCallback((lat, lng) => {
+    setDraggedPos({ lat, lng });
+  }, []);
+
+  const startAnalysis = useCallback(({ address, azimuth_override = null, lat_override = null, lng_override = null }) => {
     if (statusRef.current === 'loading') return;
     setShowModal(false);
     setCurrentAddress(address);
     setNewAddress('');
+    setDraggedPos(null);
 
     if (wsRef.current && wsRef.current.readyState < 2) {
       wsRef.current.onclose = null;
@@ -60,7 +66,10 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     setErrorMsg('');
     setBuildingPolygon(null);
 
-    if (window.kakao?.maps?.services) {
+    // 핀 드래그 재분석: 지정 좌표로 즉시 마커 설정 (geocoding 불필요)
+    if (lat_override != null && lng_override != null) {
+      setMarkerPos({ lat: lat_override, lng: lng_override });
+    } else if (window.kakao?.maps?.services) {
       const geocoder = new window.kakao.maps.services.Geocoder();
       geocoder.addressSearch(address.trim(), (res, st) => {
         if (st === window.kakao.maps.services.Status.OK && res[0]) {
@@ -72,7 +81,7 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     const ws = new WebSocket(`${WS_BASE}/ws/analyze`);
     wsRef.current = ws;
 
-    ws.onopen = () => ws.send(JSON.stringify({ address, azimuth_override }));
+    ws.onopen = () => ws.send(JSON.stringify({ address, azimuth_override, lat_override, lng_override }));
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
@@ -136,6 +145,7 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
     setPanelAzimuth(null);
     setNewAddress('');
     setCurrentAddress('');
+    setDraggedPos(null);
     onResultChange?.(false);
   }, [onResultChange, onLoadingChange]);
 
@@ -270,11 +280,47 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
               <KakaoMap
                 markerPos={markerPos}
                 onMapClick={(addr) => startAnalysis({ address: addr })}
+                onMarkerDragEnd={handleMarkerDragEnd}
                 buildingPolygon={buildingPolygon}
                 panels={panels}
                 panelAzimuth={panelAzimuth}
                 height={480}
               />
+              {/* 핀 드래그 감지 → 재분석 배너 */}
+              {draggedPos && (
+                <div style={{
+                  marginTop: 8, background: '#FFFBEB', border: '1px solid #F59E0B',
+                  borderRadius: 8, padding: '10px 14px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 12, fontSize: 13, fontFamily: "'Noto Sans KR', sans-serif",
+                }}>
+                  <span style={{ color: '#92400E' }}>
+                    📍 핀을 이동했습니다. 이 위치로 재분석하시겠습니까?
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      style={{
+                        background: '#1E6FD9', color: 'white', border: 'none',
+                        padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
+                        fontSize: 13, fontWeight: 700,
+                      }}
+                      onClick={() => startAnalysis({ address: currentAddress, lat_override: draggedPos.lat, lng_override: draggedPos.lng })}
+                    >
+                      재분석
+                    </button>
+                    <button
+                      style={{
+                        background: 'transparent', color: '#92400E',
+                        border: '1px solid #F59E0B', padding: '5px 10px',
+                        borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                      }}
+                      onClick={() => setDraggedPos(null)}
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* 분석 완료 배너 + 주소 입력 — 지도 하단 */}
               <div style={{ marginTop: 8 }}>
                 <div className="alert-box alert-success">
