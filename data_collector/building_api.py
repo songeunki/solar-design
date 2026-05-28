@@ -46,7 +46,7 @@ class BuildingAPIError(Exception):
 class BuildingAPI:
     """PNU 추출(Juso→Kakao) → 건축물대장 API → OSM 면적 폴백 순으로 시도."""
 
-    def get_building_info(self, location: Location) -> BuildingInfo:
+    def get_building_info(self, location: Location, is_user_override: bool = False) -> BuildingInfo:
         # 1단계: PNU 확보 → 건축물대장 (archArea 힌트 추출 목적)
         _pnu:           str | None  = None
         _register_item: dict | None = None
@@ -66,7 +66,9 @@ class BuildingAPI:
         # 2단계: V-World WFS polygon (archArea 힌트로 대형 복합 필지 오선택 방지)
         from data_collector.vworld_polygon import get_building_polygon
         osm_area, osm_azimuth, osm_ew_m, osm_ns_m, osm_polygon = get_building_polygon(
-            location.lat, location.lng, arch_area_m2=_arch_area_hint
+            location.lat, location.lng,
+            arch_area_m2=_arch_area_hint,
+            user_location_override=is_user_override,
         )
         polygon_source = "vworld"
 

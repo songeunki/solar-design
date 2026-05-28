@@ -63,7 +63,10 @@ def run_pipeline(
         )
 
     p(2, "건물 정보 수집")
-    building = BuildingAPI().get_building_info(location)
+    building = BuildingAPI().get_building_info(
+        location,
+        is_user_override=(lat_override is not None and lng_override is not None),
+    )
 
     p(3, "기상 데이터 수집")
     weather = WeatherAPI().get_solar_irradiance(location)

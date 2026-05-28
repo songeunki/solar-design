@@ -181,6 +181,7 @@ def get_building_polygon(
     lng: float,
     api_key: str = "",              # 프록시 방식에서는 미사용 (하위 호환 유지)
     arch_area_m2: float | None = None,  # 건축면적 힌트 — 대형 복합 필지 오선택 방지
+    user_location_override: bool = False,  # 핀 드래그 등 사용자 명시 좌표 → archArea 힌트 무시
 ) -> tuple[float | None, float | None, float | None, float | None, list | None]:
     """Vercel 프록시 경유로 건물 footprint polygon 조회.
 
@@ -217,8 +218,8 @@ def get_building_polygon(
         # 이 레이어에서 PIP 통과 feature가 있으면 바로 사용
         pip = [f for f in features if _contains_point(f, lat, lng)]
         # archArea 힌트: 1.8배 초과 polygon 제외 (대형 필지/복합건물 오선택 방지)
-        # 2.35x 필지 경계가 통과했던 2.5x보다 엄격하게 조정
-        if arch_area_m2 and pip:
+        # user_location_override=True이면 사용자가 명시한 좌표이므로 archArea 필터 생략
+        if arch_area_m2 and pip and not user_location_override:
             pip = [f for f in pip if _approx_area_m2(f) <= 1.8 * arch_area_m2]
         if pip:
             feature = max(pip, key=_bbox_area)
@@ -234,8 +235,9 @@ def get_building_polygon(
     # ── 2차: 모든 레이어에 PIP 없음 → centroid 거리 fallback ────────────────
     if all_features:
         # archArea 힌트: 0.4x~1.8x 범위만 허용 (대형 필지/소형 부속건물 모두 제외)
+        # user_location_override=True이면 사용자 명시 좌표 → archArea 필터 전면 생략
         candidates = all_features
-        if arch_area_m2:
+        if arch_area_m2 and not user_location_override:
             filtered = [(k, f) for k, f in all_features
                         if 0.4 * arch_area_m2 <= _approx_area_m2(f) <= 1.8 * arch_area_m2]
             if filtered:
@@ -248,10 +250,10 @@ def get_building_polygon(
                 )
                 return None, None, None, None, None
         logger.debug(
-            "V-World PIP 매칭 없음 → fallback (%d/%d개)",
-            len(candidates), len(all_features),
+            "V-World PIP 매칭 없음 → fallback (%d/%d개, override=%s)",
+            len(candidates), len(all_features), user_location_override,
         )
-        if arch_area_m2:
+        if arch_area_m2 and not user_location_override:
             # 면적 오차(50%) + 거리(50%) 복합 스코어 → 가장 낮은 쪽 선택
             # 거리 정규화 기준: 50m (일반 주거 건물 지오코딩 오차 상한)
             def _fallback_score(kf, _aa=arch_area_m2, _lat=lat, _lng=lng):
@@ -266,6 +268,7 @@ def get_building_polygon(
                 return 0.5 * area_err + 0.5 * dist_norm
             _, feature = min(candidates, key=_fallback_score)
         else:
+            # user_location_override 또는 arch_area_m2 없음 → 순수 거리 기준
             _, feature = min(
                 candidates,
                 key=lambda kf: math.hypot(
