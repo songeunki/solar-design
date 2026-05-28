@@ -826,5 +826,14 @@
     "annual_kwh": 31241,
     "roi_years": 9.8,
     "azimuth_deg": 228.4
+  },
+  {
+    "timestamp": "2026-05-28 19:10:50",
+    "ip": "1.223.240.125",
+    "address": "체육공원로6번길 109",
+    "capacity_kw": 26.24,
+    "annual_kwh": 33499,
+    "roi_years": 9.6,
+    "azimuth_deg": 142.5
   }
 ]
