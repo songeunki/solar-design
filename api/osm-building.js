@@ -20,12 +20,12 @@ export default async function handler(req, res) {
   }
 
   const query = `[out:json][timeout:25];way["building"](around:${radius},${lat},${lng});out body geom;`;
+  const url   = `${OVERPASS_URL}?data=${encodeURIComponent(query)}`;
 
   try {
-    const r = await fetch(OVERPASS_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:    `data=${encodeURIComponent(query)}`,
+    const r = await fetch(url, {
+      method:  'GET',
+      headers: { 'User-Agent': 'SolarDesign-Vercel/1.0 (solar analysis)' },
       signal:  AbortSignal.timeout(28_000),
     });
     if (!r.ok) {
