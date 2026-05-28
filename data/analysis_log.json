@@ -745,5 +745,14 @@
     "annual_kwh": 35950,
     "roi_years": 9.6,
     "azimuth_deg": 142.5
+  },
+  {
+    "timestamp": "2026-05-28 13:43:02",
+    "ip": "1.223.240.125",
+    "address": "부산 강서구 대저1동 2327-35",
+    "capacity_kw": 190.08,
+    "annual_kwh": 235639,
+    "roi_years": 9.9,
+    "azimuth_deg": 138.0
   }
 ]
