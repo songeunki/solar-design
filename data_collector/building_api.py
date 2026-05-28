@@ -1,5 +1,6 @@
 """건축물대장 표제부 조회 — PNU 추출 → 건축HUB API → OSM 순으로 시도."""
 import math
+import os
 import warnings
 import requests
 from dataclasses import dataclass, field
@@ -11,6 +12,11 @@ BUILDING_RECAP_URL  = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrRe
 JUSO_API_URL        = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
 KAKAO_ADDRESS_URL     = "https://dapi.kakao.com/v2/local/search/address.json"
 OVERPASS_URL          = "https://overpass-api.de/api/interpreter"
+# Vercel 프록시: Render → Overpass 직접 연결 불가 시 사용 (icn1 리전)
+_OSM_PROXY_URL = os.environ.get(
+    "OSM_PROXY_URL",
+    "https://solar-design-opal.vercel.app/api/osm-building",
+)
 
 _PURPOSE_TO_TYPE: dict[str, str] = {
     "단독주택": "주거", "공동주택": "주거", "다세대주택": "주거", "다가구주택": "주거",
@@ -442,18 +448,34 @@ def _building_info_from_osm(
       4) 기본값 _DEFAULT_AZIMUTH
     반환: (area_m2|None, azimuth_deg, ew_m|None, ns_m|None)
     """
-    # ── 건물 폴리곤 조회 (body = tags 포함) ──────────────────────────────
-    query = (
-        f"[out:json][timeout:25];"
-        f"way[\"building\"](around:{radius_m},{lat},{lng});"
-        f"out body geom;"
-    )
+    # ── 건물 폴리곤 조회: Vercel proxy 우선, 실패 시 직접 호출 ──────────────
+    elements: list = []
     try:
-        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=30)
+        resp = requests.get(
+            _OSM_PROXY_URL,
+            params={"lat": lat, "lng": lng, "radius": radius_m},
+            timeout=35,
+        )
         resp.raise_for_status()
-        elements = resp.json().get("elements", [])
+        data = resp.json()
+        if data.get("success"):
+            elements = data.get("elements", [])
     except Exception:
-        elements = []
+        pass
+
+    if not elements:
+        # Vercel proxy 실패 → Overpass 직접 시도 (로컬 환경 등)
+        query = (
+            f"[out:json][timeout:25];"
+            f"way[\"building\"](around:{radius_m},{lat},{lng});"
+            f"out body geom;"
+        )
+        try:
+            resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=30)
+            resp.raise_for_status()
+            elements = resp.json().get("elements", [])
+        except Exception:
+            elements = []
 
     if elements:
         el     = max(elements, key=lambda e: len(e.get("geometry", [])))
