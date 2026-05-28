@@ -38,11 +38,16 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
   const [currentAddress, setCurrentAddress] = useState('');
   const [draggedPos, setDraggedPos]       = useState(null); // 핀 드래그 후 새 위치
 
-  const wsRef     = useRef(null);
-  const statusRef = useRef(status);
+  const wsRef        = useRef(null);
+  const preDragPosRef = useRef(null);  // 드래그 직전 markerPos (취소 시 복원)
+  const statusRef    = useRef(status);
+  const markerPosRef = useRef(null);   // 드래그 직전 markerPos (취소 시 복원용)
   statusRef.current = status;
+  markerPosRef.current = markerPos;   // 항상 최신값 유지
 
   const handleMarkerDragEnd = useCallback((lat, lng) => {
+    // 드래그 전 위치 저장 → 취소 시 복원
+    preDragPosRef.current = markerPosRef.current;
     setDraggedPos({ lat, lng });
   }, []);
 
@@ -314,7 +319,14 @@ export default function SingleAnalysis({ onResultChange, onLoadingChange }) {
                         border: '1px solid #F59E0B', padding: '5px 10px',
                         borderRadius: 6, cursor: 'pointer', fontSize: 13,
                       }}
-                      onClick={() => setDraggedPos(null)}
+                      onClick={() => {
+                      // 마커를 드래그 전 위치로 복원
+                      if (preDragPosRef.current) {
+                        setMarkerPos({ ...preDragPosRef.current });
+                        preDragPosRef.current = null;
+                      }
+                      setDraggedPos(null);
+                    }}
                     >
                       취소
                     </button>

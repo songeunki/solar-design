@@ -118,23 +118,34 @@ export default function KakaoMap({
     </div>`;
 
     if (onMarkerDragEnd) {
-      // ── draggable 표준 마커 + 라벨 오버레이 ──────────────────────────────
-      const marker = new kakao.maps.Marker({ position: pos });
+      // ── SVG 커스텀 이미지 Marker (파란 라벨 모양, draggable) ─────────────
+      // CustomOverlay와 Marker를 분리하면 CustomOverlay가 마우스 이벤트를 가로채
+      // 드래그가 불가능해지는 문제 발생. 라벨을 Marker 이미지 자체로 만들어 해결.
+      const label = markerPos.label || '분석 위치';
+      const W     = Math.max(120, label.length * 9 + 56);
+      const H     = 46; // pill(36) + arrow(10)
+      const svg   =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+        `<rect x="0" y="0" rx="18" ry="18" width="${W}" height="36" fill="#1E6FD9"/>` +
+        `<text x="${W / 2}" y="18.5" font-size="13" font-weight="bold" fill="white"` +
+        ` text-anchor="middle" dominant-baseline="middle" font-family="sans-serif">` +
+        `&#x1F4CD; ${label}</text>` +
+        `<polygon points="${W / 2 - 6},36 ${W / 2 + 6},36 ${W / 2},${H}" fill="#1E6FD9"/>` +
+        `</svg>`;
+      const src   = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+      const img   = new kakao.maps.MarkerImage(
+        src,
+        new kakao.maps.Size(W, H),
+        { offset: new kakao.maps.Point(Math.round(W / 2), H) },
+      );
+      const marker = new kakao.maps.Marker({ position: pos, image: img, draggable: true });
       marker.setMap(map);
-      marker.setDraggable(true);
       markerRef.current = marker;
+      console.log('[KakaoMap] draggable marker created at', markerPos.lat, markerPos.lng);
 
-      // 라벨은 마커 위에 배치 (yAnchor: 2.5 → 표준 마커 39px 상단에 표시)
-      const overlay = new kakao.maps.CustomOverlay({ position: pos, content: labelContent, yAnchor: 2.5 });
-      overlay.setMap(map);
-      overlayRef.current = overlay;
-
-      kakao.maps.event.addListener(marker, 'drag', () => {
-        overlay.setPosition(marker.getPosition());
-      });
       kakao.maps.event.addListener(marker, 'dragend', () => {
         const p = marker.getPosition();
-        overlay.setPosition(p);
+        console.log('[KakaoMap] dragend →', p.getLat(), p.getLng());
         onMarkerDragEnd(p.getLat(), p.getLng());
       });
     } else {
