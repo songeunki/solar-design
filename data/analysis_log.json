@@ -529,5 +529,14 @@
     "annual_kwh": 544217,
     "roi_years": 10.8,
     "azimuth_deg": 135.0
+  },
+  {
+    "timestamp": "2026-05-28 11:04:36",
+    "ip": "115.94.191.172",
+    "address": "테헤란로 152",
+    "capacity_kw": 480.64,
+    "annual_kwh": 564141,
+    "roi_years": 10.4,
+    "azimuth_deg": 159.7
   }
 ]
