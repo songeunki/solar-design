@@ -925,5 +925,14 @@
     "annual_kwh": 33499,
     "roi_years": 9.6,
     "azimuth_deg": 142.5
+  },
+  {
+    "timestamp": "2026-07-10 08:41:55",
+    "ip": "121.169.115.183",
+    "address": "삼죽로 205-41",
+    "capacity_kw": 35.84,
+    "annual_kwh": 43980,
+    "roi_years": 7.9,
+    "azimuth_deg": 151.6
   }
 ]
