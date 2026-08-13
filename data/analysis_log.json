@@ -961,5 +961,14 @@
     "annual_kwh": 76882,
     "roi_years": 7.3,
     "azimuth_deg": 138.4
+  },
+  {
+    "timestamp": "2026-08-14 08:32:49",
+    "ip": "1.223.240.125",
+    "address": "경상남도 김해시 율하5로 14",
+    "capacity_kw": 64.0,
+    "annual_kwh": 76882,
+    "roi_years": 7.3,
+    "azimuth_deg": 138.4
   }
 ]
