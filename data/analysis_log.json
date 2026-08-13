@@ -970,5 +970,14 @@
     "annual_kwh": 76882,
     "roi_years": 7.3,
     "azimuth_deg": 138.4
+  },
+  {
+    "timestamp": "2026-08-14 08:33:27",
+    "ip": "1.223.240.125",
+    "address": "김해시 율하5로 14, LH아파트",
+    "capacity_kw": 64.0,
+    "annual_kwh": 76882,
+    "roi_years": 7.3,
+    "azimuth_deg": 138.4
   }
 ]
