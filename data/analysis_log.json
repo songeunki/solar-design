@@ -979,5 +979,14 @@
     "annual_kwh": 76882,
     "roi_years": 7.3,
     "azimuth_deg": 138.4
+  },
+  {
+    "timestamp": "2026-08-14 09:42:49",
+    "ip": "1.223.240.125",
+    "address": "봉화읍 예봉로 2048",
+    "capacity_kw": 22.4,
+    "annual_kwh": 28945,
+    "roi_years": 6.7,
+    "azimuth_deg": 193.2
   }
 ]
