@@ -988,5 +988,14 @@
     "annual_kwh": 28945,
     "roi_years": 6.7,
     "azimuth_deg": 193.2
+  },
+  {
+    "timestamp": "2026-08-14 10:49:01",
+    "ip": "1.223.240.125",
+    "address": "춘양면 의양로 4길 14",
+    "capacity_kw": 18.56,
+    "annual_kwh": 22611,
+    "roi_years": 7.1,
+    "azimuth_deg": 233.7
   }
 ]
