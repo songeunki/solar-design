@@ -1069,5 +1069,14 @@
     "annual_kwh": 29632,
     "roi_years": 6.7,
     "azimuth_deg": 192.0
+  },
+  {
+    "timestamp": "2026-08-27 14:25:00",
+    "ip": "115.94.191.172",
+    "address": "공항로 1189",
+    "capacity_kw": 7.04,
+    "annual_kwh": 8719,
+    "roi_years": 7.0,
+    "azimuth_deg": 228.3
   }
 ]
