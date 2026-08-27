@@ -1105,5 +1105,14 @@
     "annual_kwh": 37814,
     "roi_years": 7.2,
     "azimuth_deg": 226.2
+  },
+  {
+    "timestamp": "2026-08-27 14:31:43",
+    "ip": "115.94.191.172",
+    "address": "용호로 38-17",
+    "capacity_kw": 3685.12,
+    "annual_kwh": 4706882,
+    "roi_years": 6.8,
+    "azimuth_deg": 183.4
   }
 ]
