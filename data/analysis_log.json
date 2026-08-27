@@ -1060,5 +1060,14 @@
     "annual_kwh": 16111,
     "roi_years": 6.9,
     "azimuth_deg": 192.0
+  },
+  {
+    "timestamp": "2026-08-27 13:41:25",
+    "ip": "115.94.191.172",
+    "address": "부산광역시 사상구 사상로500번길 11",
+    "capacity_kw": 23.04,
+    "annual_kwh": 29632,
+    "roi_years": 6.7,
+    "azimuth_deg": 192.0
   }
 ]
